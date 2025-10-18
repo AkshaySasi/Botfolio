@@ -13,6 +13,7 @@ import BuilderPage from './pages/BuilderPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
+import PortfolioManagePage from './pages/PortfolioManagePage';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
