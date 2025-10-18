@@ -338,6 +338,53 @@ async def update_portfolio(
     
     return {"message": "Portfolio updated successfully"}
 
+@app.post("/api/portfolios/{portfolio_id}/update-files")
+async def update_portfolio_files(
+    portfolio_id: str,
+    resume: Optional[UploadFile] = File(None),
+    details: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user)
+):
+    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id})
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+    upload_dir = Path(ROOT_DIR) / "uploads" / portfolio_id
+    
+    # Update resume if provided
+    if resume:
+        resume_path = upload_dir / f"resume_{resume.filename}"
+        with open(resume_path, "wb") as f:
+            shutil.copyfileobj(resume.file, f)
+        await db.portfolios.update_one(
+            {"id": portfolio_id},
+            {"$set": {"resume_path": str(resume_path)}}
+        )
+        portfolio['resume_path'] = str(resume_path)
+    
+    # Update details if provided
+    if details:
+        details_path = upload_dir / f"details_{details.filename}"
+        with open(details_path, "wb") as f:
+            shutil.copyfileobj(details.file, f)
+        await db.portfolios.update_one(
+            {"id": portfolio_id},
+            {"$set": {"details_path": str(details_path)}}
+        )
+        portfolio['details_path'] = str(details_path)
+    
+    # Retrain chatbot
+    try:
+        setup_rag_chain(portfolio_id, portfolio['resume_path'], portfolio['details_path'])
+        await db.portfolios.update_one(
+            {"id": portfolio_id},
+            {"$set": {"is_processed": True}}
+        )
+        return {"message": "Portfolio files updated and chatbot retrained successfully"}
+    except Exception as e:
+        logger.error(f"Failed to retrain chatbot: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrain chatbot")
+
 @app.get("/api/portfolios/{portfolio_id}/analytics")
 async def get_analytics(portfolio_id: str, current_user: User = Depends(get_current_user)):
     portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id}, {"_id": 0})
