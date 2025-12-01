@@ -10,18 +10,24 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.vectorstores import FAISS
+from dotenv import load_dotenv
+load_dotenv()
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(__file__).parent
 
-# Get Gemini API key from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY not found in environment!")
+else:
     os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
+    logger.info("Gemini API key loaded successfully.")
 
-MODEL_NAME = "gemini-2.0-flash-exp"
+
+MODEL_NAME = "gemini-2.5-flash"
 
 # Store RAG chains in memory (in production, use Redis or similar)
 rag_chains = {}

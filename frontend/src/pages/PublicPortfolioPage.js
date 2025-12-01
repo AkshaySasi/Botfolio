@@ -6,7 +6,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Bot, Send, Loader2 } from 'lucide-react';
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
 
 const PublicPortfolioPage = () => {
   const { customUrl } = useParams();

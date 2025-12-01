@@ -6,7 +6,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Plus, Bot, BarChart, Settings, LogOut, ExternalLink, Trash2 } from 'lucide-react';
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();

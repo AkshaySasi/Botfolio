@@ -187,8 +187,7 @@ async def login(credentials: UserLogin):
 @app.post("/api/auth/google", response_model=TokenResponse)
 async def google_auth(auth_request: GoogleAuthRequest):
     # For now, this is a placeholder
-    # In production, verify the Google token
-    # For development, we'll use Emergent integration
+
     raise HTTPException(status_code=501, detail="Google OAuth coming soon")
 
 @app.get("/api/auth/me", response_model=User)

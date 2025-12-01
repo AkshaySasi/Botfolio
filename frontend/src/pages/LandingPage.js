@@ -13,7 +13,7 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botfolio</span>
           </Link>
           
           <div className="hidden md:flex items-center gap-8">
@@ -42,7 +42,7 @@ const LandingPage = () => {
           <div className="text-center space-y-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-6">
               <Bot className="w-5 h-5 text-emerald-400" />
-              <span className="text-sm text-emerald-400">AI-Powered Portfolio Builder</span>
+              <span className="text-sm text-emerald-400">Build your AI Portfolio</span>
             </div>
             
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-tight" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
@@ -50,7 +50,7 @@ const LandingPage = () => {
                 Build Your AI Portfolio
               </span>
               <br />
-              <span className="text-white">With a Smart Chatbot</span>
+              <span className="text-white">With Smart Personal Chatbot</span>
             </h1>
             
             <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed" style={{fontFamily: 'Inter, sans-serif'}}>
@@ -290,10 +290,10 @@ const LandingPage = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-8 h-8" />
-              <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+              <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botfolio</span>
             </div>
             <p className="text-gray-500 text-sm" style={{fontFamily: 'Inter, sans-serif'}}>
-              © 2025 Botiee. Transforming careers with AI.
+              © 2025 Botfolio. Transforming careers with AI.
             </p>
             <div className="flex gap-6">
               <a href="#" className="text-gray-500 hover:text-emerald-400 transition-colors">Privacy</a>
