@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import AdBanner from '@/components/AdBanner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
@@ -207,6 +208,9 @@ const DashboardPage = () => {
                 ))}
               </div>
             )}
+
+            {/* Ad Banner */}
+            <AdBanner slotId="1234567890" />
           </>
         )}
       </div>

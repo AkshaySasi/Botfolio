@@ -94,8 +94,8 @@ const PortfolioManagePage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-10 h-10" />
+            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
         </div>
       </nav>
@@ -104,10 +104,10 @@ const PortfolioManagePage = () => {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
+            <h1 className="text-4xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               {portfolio?.name}
             </h1>
-            <p className="text-gray-400" style={{fontFamily: 'Inter, sans-serif'}}>
+            <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
               Manage your portfolio chatbot and analytics
             </p>
           </div>
@@ -162,7 +162,7 @@ const PortfolioManagePage = () => {
             </div>
 
             <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-8">
-              <h3 className="text-2xl font-bold text-white mb-4" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Engagement Overview</h3>
+              <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Engagement Overview</h3>
               <div className="text-center py-12">
                 <BarChart className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-400">Detailed analytics and insights coming soon...</p>
@@ -175,8 +175,8 @@ const PortfolioManagePage = () => {
           <TabsContent value="update" className="mt-6">
             <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-8">
               <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-2" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Update Portfolio Files</h3>
-                <p className="text-gray-400" style={{fontFamily: 'Inter, sans-serif'}}>
+                <h3 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Update Portfolio Files</h3>
+                <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Upload new resume or details to retrain your AI chatbot with updated information
                 </p>
               </div>

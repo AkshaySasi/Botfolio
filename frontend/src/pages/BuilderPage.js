@@ -88,8 +88,8 @@ const BuilderPage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10 animate-spin-slow" style={{ animation: loading ? 'spin 2s linear infinite' : 'none' }} />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botiee</span>
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-10 h-10 animate-spin-slow" style={{ animation: loading ? 'spin 2s linear infinite' : 'none' }} />
+            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
         </div>
       </nav>

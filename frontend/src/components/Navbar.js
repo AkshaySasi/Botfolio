@@ -31,7 +31,7 @@ const Navbar = () => {
                 <div className="flex items-center gap-8">
                     <Link to="/" className="flex items-center gap-2">
                         <img src="/assets/botfolio-logo-transparent.png" alt="Botiee" className="w-10 h-10 object-contain" />
-                        <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botiee</span>
+                        <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
                     </Link>
 
                     {/* Desktop Navigation Links */}

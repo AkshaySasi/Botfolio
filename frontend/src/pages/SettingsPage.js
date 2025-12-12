@@ -23,16 +23,16 @@ const SettingsPage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-10 h-10" />
+            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
         </div>
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="mb-12">
-          <h1 className="text-4xl font-bold text-white mb-2" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Settings</h1>
-          <p className="text-gray-400" style={{fontFamily: 'Inter, sans-serif'}}>Manage your account and subscription</p>
+          <h1 className="text-4xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Settings</h1>
+          <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>Manage your account and subscription</p>
         </div>
 
         {/* Profile Section */}
@@ -64,7 +64,7 @@ const SettingsPage = () => {
           </h2>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r" style={{backgroundImage: `linear-gradient(to right, ${getTierBadgeColor(user?.subscription_tier).split(' ')[1]} 0%, ${getTierBadgeColor(user?.subscription_tier).split(' ')[3]} 100%)`}}>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r" style={{ backgroundImage: `linear-gradient(to right, ${getTierBadgeColor(user?.subscription_tier).split(' ')[1]} 0%, ${getTierBadgeColor(user?.subscription_tier).split(' ')[3]} 100%)` }}>
                 <Crown className="w-5 h-5 text-black" />
                 <span className="font-bold text-black uppercase">{user?.subscription_tier || 'FREE'} PLAN</span>
               </div>
@@ -80,7 +80,7 @@ const SettingsPage = () => {
               </Button>
             )}
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-700">
             <div>
               <div className="text-2xl font-bold text-white">{user?.portfolios_count || 0}</div>

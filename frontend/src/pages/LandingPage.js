@@ -65,6 +65,7 @@ const ContactForm = () => {
   );
 };
 
+import AdBanner from '@/components/AdBanner';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -85,7 +86,7 @@ const LandingPage = () => {
       });
 
       const options = {
-        key: "rzp_test_placeholder", // Replace with your actual key in frontend env if needed, but here it often comes from backend or hardcoded for test
+        key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_placeholder", // Env var for production, fallback for dev
         amount: res.data.amount,
         currency: res.data.currency,
         name: "Botfolio",
@@ -399,12 +400,16 @@ const LandingPage = () => {
         </div>
       </section>
 
+      <div className="max-w-7xl mx-auto px-6 pb-12">
+        <AdBanner slotId="0987654321" />
+      </div>
+
       {/* Footer */}
       <footer className="border-t border-emerald-500/20 py-12 bg-black">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-8 h-8" />
+              <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-8 h-8" />
               <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
             </div>
             <p className="text-gray-500 text-sm" style={{ fontFamily: 'Inter, sans-serif' }}>

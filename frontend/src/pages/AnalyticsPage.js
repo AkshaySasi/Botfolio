@@ -50,18 +50,18 @@ const AnalyticsPage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-10 h-10" />
+            <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="mb-12">
-          <h1 className="text-4xl font-bold text-white mb-2" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
+          <h1 className="text-4xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {portfolio?.name} - Analytics
           </h1>
-          <p className="text-gray-400" style={{fontFamily: 'Inter, sans-serif'}}>
+          <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
             Track engagement and performance of your portfolio chatbot
           </p>
         </div>
@@ -105,7 +105,7 @@ const AnalyticsPage = () => {
         </div>
 
         <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-8">
-          <h2 className="text-2xl font-bold text-white mb-6" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Engagement Overview</h2>
+          <h2 className="text-2xl font-bold text-white mb-6" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Engagement Overview</h2>
           <div className="text-center py-12">
             <p className="text-gray-400">Detailed analytics coming soon...</p>
             <p className="text-gray-500 text-sm mt-2">Track visitor behavior, popular questions, and engagement trends</p>

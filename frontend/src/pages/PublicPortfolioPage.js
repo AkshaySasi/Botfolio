@@ -29,7 +29,7 @@ const PublicPortfolioPage = () => {
     try {
       const response = await axios.get(`${API_URL}/public/${customUrl}`);
       setPortfolio(response.data);
-      
+
       // Add welcome message
       setMessages([{
         role: 'assistant',
@@ -103,15 +103,15 @@ const PublicPortfolioPage = () => {
       <header className="border-b border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-black to-transparent">
         <div className="max-w-7xl mx-auto px-6 py-12 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-16 h-16" />
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-16 h-16" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {portfolio.owner_name}'s
           </h1>
-          <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent mb-4" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
+          <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             AI Portfolio Assistant
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto" style={{fontFamily: 'Inter, sans-serif'}}>
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto" style={{ fontFamily: 'Inter, sans-serif' }}>
             Chat with the AI assistant to learn about experience, skills, and projects
           </p>
         </div>
@@ -119,7 +119,7 @@ const PublicPortfolioPage = () => {
 
       {/* Chat Interface */}
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl overflow-hidden" style={{height: 'calc(100vh - 400px)', minHeight: '500px'}}>
+        <div className="bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl overflow-hidden" style={{ height: 'calc(100vh - 400px)', minHeight: '500px' }}>
           {/* Messages */}
           <div className="h-full overflow-y-auto p-6 space-y-4" data-testid="chat-messages">
             {messages.map((msg, idx) => (
@@ -134,13 +134,12 @@ const PublicPortfolioPage = () => {
                   </div>
                 )}
                 <div
-                  className={`max-w-[70%] p-4 rounded-2xl ${
-                    msg.role === 'user'
-                      ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black'
-                      : 'bg-black/50 border border-emerald-500/20 text-white'
-                  }`}
+                  className={`max-w-[70%] p-4 rounded-2xl ${msg.role === 'user'
+                    ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black'
+                    : 'bg-black/50 border border-emerald-500/20 text-white'
+                    }`}
                 >
-                  <p className="text-sm md:text-base" style={{fontFamily: 'Inter, sans-serif'}}>{msg.content}</p>
+                  <p className="text-sm md:text-base" style={{ fontFamily: 'Inter, sans-serif' }}>{msg.content}</p>
                 </div>
                 {msg.role === 'user' && (
                   <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
@@ -190,8 +189,8 @@ const PublicPortfolioPage = () => {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-gray-500 text-sm">Powered by</span>
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-6 h-6" />
-            <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-6 h-6" />
+            <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
           <p className="text-gray-500 text-xs">Create your own AI portfolio chatbot</p>
         </div>
