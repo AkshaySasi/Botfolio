@@ -32,7 +32,7 @@ MODEL_NAME = "gemini-2.5-flash"
 # Store RAG chains in memory (in production, use Redis or similar)
 rag_chains = {}
 
-def setup_rag_chain(portfolio_id: str, resume_path: str, details_path: str):
+def setup_rag_chain(portfolio_id: str, resume_path: Optional[str] = None, details_path: Optional[str] = None, text_content: Optional[str] = None):
     """
     Set up RAG chain for a portfolio
     """
@@ -42,7 +42,7 @@ def setup_rag_chain(portfolio_id: str, resume_path: str, details_path: str):
         # Load documents
         docs = []
         
-        if os.path.exists(resume_path):
+        if resume_path and os.path.exists(resume_path):
             try:
                 if resume_path.endswith('.pdf'):
                     loader = PyPDFLoader(resume_path)
@@ -53,15 +53,39 @@ def setup_rag_chain(portfolio_id: str, resume_path: str, details_path: str):
             except Exception as e:
                 logger.error(f"Error loading resume: {e}")
         
-        if os.path.exists(details_path):
+        if details_path and os.path.exists(details_path):
             try:
                 loader = TextLoader(details_path)
                 docs.extend(loader.load())
             except Exception as e:
                 logger.error(f"Error loading details: {e}")
         
+        if text_content:
+            try:
+                # Save text content to a temporary file to use TextLoader for consistency
+                text_path = ROOT_DIR / "uploads" / portfolio_id / "additional_text.txt"
+                text_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(text_path, "w", encoding="utf-8") as f:
+                    f.write(text_content)
+                
+                loader = TextLoader(str(text_path))
+                docs.extend(loader.load())
+            except Exception as e:
+                logger.error(f"Error processing text content: {e}")
+        
         if not docs:
-            raise ValueError("No documents loaded")
+            # If no docs, create a dummy doc to avoid failure (e.g. if user only wants to chat generally or setup failed)
+            # But better to raise error to warn user 
+            # actually for Empty portfolios we might support it later, but strictly per requirements:
+            # "users need to login... and upload resume...". 
+            # But "details.txt optional and a text box (also optional)".
+            # If resume is missing causing empty docs, we fail.
+            if not resume_path and not text_content and not details_path:
+                 raise ValueError("No content provided to train chatbot")
+            
+            # If docs is still empty (e.g. failed to load), we might want to handle gracefully
+            if not docs:
+                 raise ValueError("Failed to load any documents")
         
         # Split documents
         text_splitter = RecursiveCharacterTextSplitter(

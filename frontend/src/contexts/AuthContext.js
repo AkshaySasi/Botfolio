@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL}`;
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 
 export const useAuth = () => useContext(AuthContext);
@@ -40,24 +40,24 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const response = await axios.post(`${API_URL}/api/auth/login`, { email, password });
     const { access_token, user: userData } = response.data;
-    
+
     localStorage.setItem('token', access_token);
     setToken(access_token);
     setUser(userData);
     axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-    
+
     return userData;
   };
 
   const register = async (name, email, password) => {
     const response = await axios.post(`${API_URL}/api/auth/register`, { name, email, password });
     const { access_token, user: userData } = response.data;
-    
+
     localStorage.setItem('token', access_token);
     setToken(access_token);
     setUser(userData);
     axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-    
+
     return userData;
   };
 

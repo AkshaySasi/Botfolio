@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -60,6 +60,16 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     subscription_tier: str = "free"  # free, pro, enterprise
     portfolios_count: int = 0
+    is_admin: bool = False
+    subscription_expiry: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30))
+    daily_queries_count: int = 0
+    last_query_date: Optional[datetime] = None
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    is_admin: Optional[bool] = None
+    subscription_tier: Optional[str] = None
+    subscription_expiry: Optional[datetime] = None
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -87,12 +97,15 @@ class Portfolio(BaseModel):
     custom_url: str
     resume_path: Optional[str] = None
     details_path: Optional[str] = None
+    text_content: Optional[str] = None
     is_active: bool = True
     is_processed: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     analytics: dict = Field(default_factory=dict)
     chatbot_config: dict = Field(default_factory=dict)
     custom_domain: Optional[str] = None
+
+
 
 class ChatMessage(BaseModel):
     portfolio_url: str
@@ -138,6 +151,11 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+async def check_admin(current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
 
 # ===== AUTH ENDPOINTS =====
 
@@ -200,8 +218,9 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def create_portfolio(
     name: str = Form(...),
     custom_url: str = Form(...),
-    resume: UploadFile = File(...),
-    details: UploadFile = File(...),
+    text_content: Optional[str] = Form(None),
+    resume: Optional[UploadFile] = File(None),
+    details: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
 ):
     # Check portfolio limit based on subscription
@@ -218,14 +237,17 @@ async def create_portfolio(
     upload_dir = Path(ROOT_DIR) / "uploads" / portfolio_id
     upload_dir.mkdir(parents=True, exist_ok=True)
     
-    resume_path = upload_dir / f"resume_{resume.filename}"
-    details_path = upload_dir / f"details_{details.filename}"
-    
-    with open(resume_path, "wb") as f:
-        shutil.copyfileobj(resume.file, f)
-    
-    with open(details_path, "wb") as f:
-        shutil.copyfileobj(details.file, f)
+    resume_path = None
+    if resume:
+        resume_path = upload_dir / f"resume_{resume.filename}"
+        with open(resume_path, "wb") as f:
+            shutil.copyfileobj(resume.file, f)
+            
+    details_path = None
+    if details:
+        details_path = upload_dir / f"details_{details.filename}"
+        with open(details_path, "wb") as f:
+            shutil.copyfileobj(details.file, f)
     
     # Create portfolio
     portfolio = Portfolio(
@@ -233,8 +255,9 @@ async def create_portfolio(
         user_id=current_user.id,
         name=name,
         custom_url=custom_url,
-        resume_path=str(resume_path),
-        details_path=str(details_path),
+        resume_path=str(resume_path) if resume_path else None,
+        details_path=str(details_path) if details_path else None,
+        text_content=text_content,
         is_processed=False
     )
     
@@ -251,7 +274,7 @@ async def create_portfolio(
     
     # Trigger AI processing in background
     try:
-        setup_rag_chain(portfolio_id, str(resume_path), str(details_path))
+        setup_rag_chain(portfolio_id, str(resume_path) if resume_path else None, str(details_path) if details_path else None, text_content)
         await db.portfolios.update_one(
             {"id": portfolio_id},
             {"$set": {"is_processed": True}}
@@ -426,6 +449,43 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
     if not portfolio or not portfolio.get('is_active') or not portfolio.get('is_processed'):
         raise HTTPException(status_code=404, detail="Portfolio chatbot not available")
     
+    # Get owner to check limits
+    user = await db.users.find_one({"id": portfolio['user_id']})
+    if not user:
+        raise HTTPException(status_code=404, detail="Portfolio owner not found")
+        
+    # Check subscription & limits
+    now = datetime.now(timezone.utc)
+    
+    # Reset daily count if new day
+    if user.get('last_query_date'):
+        last_date = user['last_query_date'].replace(tzinfo=timezone.utc) if user['last_query_date'].tzinfo is None else user['last_query_date']
+        if last_date.date() < now.date():
+            user['daily_queries_count'] = 0
+            await db.users.update_one({"id": user['id']}, {"$set": {"daily_queries_count": 0}})
+
+    # Check limits
+    daily_limit = 5 # Default Free
+    if user.get('subscription_tier') == 'starter':
+        daily_limit = 50
+    elif user.get('subscription_tier') == 'pro' or user.get('subscription_tier') == 'enterprise':
+        daily_limit = 999999 # Unlimited
+        
+    if user.get('daily_queries_count', 0) >= daily_limit:
+          raise HTTPException(status_code=402, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade.")
+             
+    # Check expiry
+    if user.get('subscription_expiry'):
+        expiry = user['subscription_expiry'].replace(tzinfo=timezone.utc) if user['subscription_expiry'].tzinfo is None else user['subscription_expiry']
+        if now > expiry:
+             raise HTTPException(status_code=402, detail="Portfolio subscription expired")
+
+    # Increment usage
+    await db.users.update_one(
+        {"id": user['id']},
+        {"$inc": {"daily_queries_count": 1}, "$set": {"last_query_date": now}}
+    )
+
     # Query RAG
     try:
         response = query_chatbot(portfolio['id'], chat.message)
@@ -447,6 +507,123 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail="Chat service error")
+
+# ===== PAYMENT ENDPOINTS (RAZORPAY) =====
+import razorpay
+
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_placeholder')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'secret_placeholder')
+
+# Initialize Razorpay client
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+class OrderRequest(BaseModel):
+    plan_id: str  # 'starter' or 'pro'
+
+class PaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan_id: str
+
+@app.post("/api/payment/create-order")
+async def create_order(request: OrderRequest, current_user: User = Depends(get_current_user)):
+    amount = 0
+    if request.plan_id == 'starter':
+        amount = 9900  # ₹99.00 in paise
+    elif request.plan_id == 'pro':
+        amount = 49900 # ₹499.00 in paise
+    else:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+        
+    try:
+        data = { "amount": amount, "currency": "INR", "receipt": f"receipt_{current_user.id[:8]}" }
+        order = razorpay_client.order.create(data=data)
+        return order
+    except Exception as e:
+        logger.error(f"Razorpay Error: {e}")
+        raise HTTPException(status_code=500, detail="Could not create order")
+
+@app.post("/api/payment/verify")
+async def verify_payment(data: PaymentVerification, current_user: User = Depends(get_current_user)):
+    try:
+        # Verify signature
+        params_dict = {
+            'razorpay_order_id': data.razorpay_order_id,
+            'razorpay_payment_id': data.razorpay_payment_id,
+            'razorpay_signature': data.razorpay_signature
+        }
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        
+        # Update User Subscription
+        expiry = datetime.now(timezone.utc) + timedelta(days=30)
+        await db.users.update_one(
+            {"id": current_user.id},
+            {
+                "$set": {
+                    "subscription_tier": data.plan_id,
+                    "subscription_expiry": expiry,
+                    "daily_queries_count": 0 # Reset count on upgrade
+                }
+            }
+        )
+        return {"status": "success", "tier": data.plan_id}
+        
+    except razorpay.errors.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+    except Exception as e:
+         logger.error(f"Payment Confirm Error: {e}")
+         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ===== ADMIN ENDPOINTS =====
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(current_user: User = Depends(check_admin)):
+    total_users = await db.users.count_documents({})
+    total_portfolios = await db.portfolios.count_documents({})
+    # Revenue is mocked for now as we don't have payments yet
+    revenue = 0 
+    pending_approvals = 0
+    
+    return {
+        "total_users": total_users,
+        "total_portfolios": total_portfolios,
+        "revenue": revenue,
+        "pending_approvals": pending_approvals
+    }
+
+@app.get("/api/admin/users", response_model=List[User])
+async def get_all_users(limit: int = 100, current_user: User = Depends(check_admin)):
+    users = await db.users.find({}, {"_id": 0}).to_list(limit)
+    return users
+
+@app.put("/api/admin/users/{user_id}")
+async def update_user_admin(user_id: str, updates: UserUpdate, current_user: User = Depends(check_admin)):
+    update_data = updates.model_dump(exclude_unset=True)
+    if not update_data:
+        return {"message": "No updates provided"}
+        
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    return {"message": "User updated successfully"}
+
+# ===== CONTACT/MESSAGES =====
+
+class ContactMessage(BaseModel):
+    name: str
+    email: EmailStr
+    message: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+@app.post("/api/contact")
+async def submit_contact(msg: ContactMessage):
+    await db.messages.insert_one(msg.model_dump())
+    return {"message": "Message received"}
+
+@app.get("/api/admin/messages")
+async def get_messages(current_user: User = Depends(check_admin)):
+    messages = await db.messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return messages
 
 # ===== HEALTH CHECK =====
 

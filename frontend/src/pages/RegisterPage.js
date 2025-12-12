@@ -20,7 +20,7 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -32,7 +32,12 @@ const RegisterPage = () => {
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Registration failed');
+      console.error("Registration Error:", error);
+      if (error.code === "ERR_NETWORK") {
+        toast.error("Network Error: Backend not reachable. Is the server running on port 8000?");
+      } else {
+        toast.error(error.response?.data?.detail || error.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -44,10 +49,10 @@ const RegisterPage = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-12 h-12" />
-            <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botiee</span>
           </Link>
-          <h1 className="text-3xl font-bold text-white mb-2" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Create Your Account</h1>
-          <p className="text-gray-400" style={{fontFamily: 'Inter, sans-serif'}}>Start building your AI portfolio today</p>
+          <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Create Your Account</h1>
+          <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>Start building your AI portfolio today</p>
         </div>
 
         <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-8" data-testid="register-form">

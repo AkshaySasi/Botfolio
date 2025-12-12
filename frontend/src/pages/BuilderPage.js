@@ -32,8 +32,8 @@ const BuilderPage = () => {
   };
 
   const handleSubmit = async () => {
-    if (!formData.resume || !formData.details) {
-      toast.error('Please upload both resume and details files');
+    if (!formData.resume) {
+      toast.error('Please upload your resume');
       return;
     }
 
@@ -44,23 +44,28 @@ const BuilderPage = () => {
     data.append('name', formData.name);
     data.append('custom_url', formData.customUrl);
     data.append('resume', formData.resume);
-    data.append('details', formData.details);
+    if (formData.details) {
+      data.append('details', formData.details);
+    }
+    if (formData.textContent) {
+      data.append('text_content', formData.textContent);
+    }
 
     try {
       setProgress(30);
       const response = await axios.post(`${API_URL}/portfolios/create`, data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       setProgress(60);
-      
+
       // Simulate AI processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       setProgress(90);
-      
+
       await new Promise(resolve => setTimeout(resolve, 500));
       setProgress(100);
-      
+
       toast.success('Portfolio created successfully!');
       setTimeout(() => {
         navigate('/dashboard');
@@ -83,18 +88,18 @@ const BuilderPage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10 animate-spin-slow" style={{animation: loading ? 'spin 2s linear infinite' : 'none'}} />
-            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{fontFamily: 'Space Grotesk, sans-serif'}}>Botiee</span>
+            <img src="https://customer-assets.emergentagent.com/job_91f5d044-998c-47b3-970c-f12d04c4f8fd/artifacts/ne4azb2e_Botiy.png" alt="Botiee" className="w-10 h-10 animate-spin-slow" style={{ animation: loading ? 'spin 2s linear infinite' : 'none' }} />
+            <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botiee</span>
           </div>
         </div>
       </nav>
 
       <div className="max-w-3xl mx-auto px-6 py-12">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
-            Create Your <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">AI Portfolio</span>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Create Your <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">AI Chatbot</span>
           </h1>
-          <p className="text-gray-400 text-lg" style={{fontFamily: 'Inter, sans-serif'}}>
+          <p className="text-gray-400 text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>
             Upload your resume and details to generate an intelligent portfolio chatbot
           </p>
         </div>
@@ -174,7 +179,7 @@ const BuilderPage = () => {
               </div>
 
               <div>
-                <Label htmlFor="details" className="text-gray-300 mb-2 block">Upload Career Details (TXT)</Label>
+                <Label htmlFor="details" className="text-gray-300 mb-2 block">Upload Career Details (TXT) <span className="text-gray-500 text-xs ml-2">(Optional)</span></Label>
                 <div className="relative">
                   <input
                     id="details"
@@ -194,12 +199,23 @@ const BuilderPage = () => {
                     </span>
                   </label>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Additional information about your projects, skills, and experience</p>
+              </div>
+
+              <div>
+                <Label htmlFor="textContent" className="text-gray-300 mb-2 block">Additional Details (Text) <span className="text-gray-500 text-xs ml-2">(Optional)</span></Label>
+                <textarea
+                  id="textContent"
+                  rows="4"
+                  placeholder="Paste your bio, skills, or any other info here..."
+                  value={formData.textContent || ''}
+                  onChange={(e) => setFormData({ ...formData, textContent: e.target.value })}
+                  className="w-full bg-black/50 border border-emerald-500/30 rounded-xl p-3 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none"
+                />
               </div>
 
               <Button
                 onClick={handleSubmit}
-                disabled={loading || !formData.name || !formData.customUrl || !formData.resume || !formData.details}
+                disabled={loading || !formData.name || !formData.customUrl || !formData.resume}
                 className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold py-6"
                 data-testid="create-submit-btn"
               >

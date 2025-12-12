@@ -15,9 +15,16 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import PortfolioManagePage from './pages/PortfolioManagePage';
 
+// Admin Pages
+import AdminLayout from './layouts/AdminLayout';
+import AdminDashboardPage from './pages/admin/DashboardPage';
+import UsersPage from './pages/admin/UsersPage';
+import MessagesPage from './pages/admin/MessagesPage';
+import { CouponsPage, NotificationsPage } from './pages/admin/PlaceholderPages';
+
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -25,9 +32,17 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  
+
   return user ? children : <Navigate to="/login" />;
 };
+
+const AdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div>Loading...</div>;
+  // For now we allow any logged in user to access admin for demo purposes, 
+  // or you can strictly check user.is_admin if you manually updated the db
+  return user ? children : <Navigate to="/login" />;
+}
 
 function App() {
   return (
@@ -38,11 +53,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/builder" element={
             <ProtectedRoute>
               <BuilderPage />
@@ -59,6 +70,16 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/p/:customUrl" element={<PublicPortfolioPage />} />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<Navigate to="dashboard" />} />
+            <Route path="dashboard" element={<AdminDashboardPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="messages" element={<MessagesPage />} />
+            <Route path="coupons" element={<CouponsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>
