@@ -4,8 +4,7 @@ from pathlib import Path
 from typing import Optional
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
@@ -28,6 +27,7 @@ else:
 
 
 MODEL_NAME = "gemini-2.5-flash"
+EMBEDDING_MODEL = "models/text-embedding-004" # Efficient Google Embedding Model
 
 # Store RAG chains in memory (in production, use Redis or similar)
 rag_chains = {}
@@ -95,12 +95,8 @@ def setup_rag_chain(portfolio_id: str, resume_path: Optional[str] = None, detail
         split_docs = text_splitter.split_documents(docs)
         logger.info(f"Split into {len(split_docs)} chunks")
         
-        # Create embeddings
-        embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True}
-        )
+        # Create embeddings (Google API - No RAM usage)
+        embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
         
         # Create vector store
         vectorstore = FAISS.from_documents(documents=split_docs, embedding=embeddings)
@@ -163,12 +159,8 @@ def query_chatbot(portfolio_id: str, message: str) -> str:
             if not vector_dir.exists():
                 raise ValueError(f"Portfolio {portfolio_id} not found")
             
-            # Load vector store
-            embeddings = HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"},
-                encode_kwargs={"normalize_embeddings": True}
-            )
+            # Load vector store (Google API - No RAM usage)
+            embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
             vectorstore = FAISS.load_local(
                 str(vector_dir),
                 embeddings,
