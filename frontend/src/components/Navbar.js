@@ -75,6 +75,20 @@ const Navbar = () => {
                         </>
                     )}
                 </div>
+
+                {/* Mobile Menu Button */}
+                <button className="md:hidden text-gray-300 ml-4" onClick={() => document.getElementById('mobile-menu').classList.toggle('hidden')}>
+                    <Settings className="w-6 h-6" />
+                </button>
+            </div>
+
+            {/* Mobile Menu Overlay */}
+            <div id="mobile-menu" className="hidden md:hidden absolute top-full left-0 w-full bg-[#0a0a0a] border-b border-emerald-500/20 p-4 flex flex-col gap-4">
+                <button onClick={() => scrollToSection('home')} className="text-gray-300 hover:text-emerald-400 text-left">Home</button>
+                <button onClick={() => scrollToSection('features')} className="text-gray-300 hover:text-emerald-400 text-left">Features</button>
+                <button onClick={() => scrollToSection('pricing')} className="text-gray-300 hover:text-emerald-400 text-left">Pricing</button>
+                <Link to="/dashboard" className="text-gray-300 hover:text-emerald-400">Dashboard</Link>
+                {user?.is_admin && <Link to="/admin" className="text-emerald-400">Admin Panel</Link>}
             </div>
         </nav>
     );

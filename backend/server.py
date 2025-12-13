@@ -506,7 +506,14 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
         return ChatResponse(response=response)
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="Chat service error")
+        # Sanitize error for user
+        error_msg = str(e).lower()
+        if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
+             raise HTTPException(status_code=429, detail="The AI engine is out of power. Please try again in a few minutes.")
+        if "permission" in error_msg:
+             raise HTTPException(status_code=403, detail="AI engine access denied. Please contact support.")
+             
+        raise HTTPException(status_code=500, detail="The AI server is experiencing heavy load. Please try again later.")
 
 # ===== PAYMENT ENDPOINTS (RAZORPAY) =====
 import razorpay
