@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Bot, BarChart, Settings, LogOut, ExternalLink, Trash2, Video } from 'lucide-react';
+import { Plus, Bot, BarChart, Settings, LogOut, ExternalLink, Trash2, Eye } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
@@ -188,11 +188,11 @@ const DashboardPage = () => {
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => toast.info('Video Portfolio feature coming soon!')}
+                        onClick={() => window.open(`/p/${portfolio.custom_url}`, '_blank')}
                         className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30"
                       >
-                        <Video className="w-4 h-4 mr-1" />
-                        Video
+                        <Eye className="w-4 h-4 mr-1" />
+                        View
                       </Button>
                       <Button
                         size="sm"
