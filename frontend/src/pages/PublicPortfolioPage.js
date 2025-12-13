@@ -17,6 +17,13 @@ const PublicPortfolioPage = () => {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
 
+  const recommendedQuestions = [
+    "Tell me about your experience",
+    "What are your key skills?",
+    "What are your strengths?",
+    "Describe your projects"
+  ];
+
   useEffect(() => {
     fetchPortfolio();
   }, [customUrl]);
@@ -73,6 +80,25 @@ const PublicPortfolioPage = () => {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const handleChipClick = (msg) => {
+    // Direct send for chips
+    if (sending) return;
+    setSending(true);
+    setMessages(prev => [...prev, { role: 'user', content: msg }]);
+
+    axios.post(`${API_URL}/chat/${customUrl}`, {
+      portfolio_url: customUrl,
+      message: msg,
+    }).then(response => {
+      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+    }).catch(() => {
+      toast.error('Failed to get response');
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, error occurred.' }]);
+    }).finally(() => {
+      setSending(false);
+    });
   };
 
   if (loading) {
@@ -162,8 +188,21 @@ const PublicPortfolioPage = () => {
           </div>
         </div>
 
+        {/* Recommended Questions Chips */}
+        <div className="flex gap-2 mb-2 mt-4 overflow-x-auto pb-2 scrollbar-none">
+          {recommendedQuestions.map((q, i) => (
+            <button
+              key={i}
+              onClick={() => handleChipClick(q)}
+              className="whitespace-nowrap px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-colors"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
         {/* Input */}
-        <div className="mt-4 flex gap-3">
+        <div className="mt-2 flex gap-3">
           <Input
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}

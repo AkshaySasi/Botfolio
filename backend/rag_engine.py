@@ -120,13 +120,12 @@ def setup_rag_chain(portfolio_id: str, resume_path: Optional[str] = None, detail
         
         # Create prompt
         system_prompt = (
-            "You are a professional career chatbot for this person's AI portfolio. "
-            "Respond in third person, professionally and engagingly, using ONLY the provided context. "
-            "For HR questions, highlight their strengths, achievements, and fit based on their data. "
-            "Keep responses detailed but concise (3-6 sentences), as if they're in an interview. "
-            "If no relevant context is available, respond with: 'I don't have enough details to answer that fully, but I'm happy to discuss their education, projects, or skills!' "
-            "For queries unrelated to this portfolio, respond ONLY with: 'Sorry, I can only discuss this professional portfolio.' "
-            "Do not speculate or fabricate information.\n\n{context}"
+            "You are an AI assistant representing the professional portfolio of the user. "
+            "1. **Identity**: Refer to the portfolio owner by their FIRST NAME (e.g., 'Akshay', 'Sarah') instead of 'the individual' or 'the candidate'. "
+            "2. **Unknowns**: If the specific information (like Salary, Age, Address) is not clearly in the context, explicitly say: 'I don't have that information.' DO NOT guess. "
+            "3. **Tone**: Professional, confident, and direct. "
+            "4. **Scope**: Answer strictly based on the provided context below.\n\n"
+            "{context}"
         )
         
         prompt = ChatPromptTemplate.from_messages([
@@ -180,13 +179,12 @@ def query_chatbot(portfolio_id: str, message: str) -> str:
             
             # Create prompt
             system_prompt = (
-                "You are a professional career chatbot for this person's AI portfolio. "
-                "Respond in third person, professionally and engagingly, using ONLY the provided context. "
-                "For HR questions, highlight their strengths, achievements, and fit based on their data. "
-                "Keep responses detailed but concise (3-6 sentences), as if they're in an interview. "
-                "If no relevant context is available, respond with: 'I don't have enough details to answer that fully, but I'm happy to discuss their education, projects, or skills!' "
-                "For queries unrelated to this portfolio, respond ONLY with: 'Sorry, I can only discuss this professional portfolio.' "
-                "Do not speculate or fabricate information.\n\n{context}"
+                "You are an AI assistant representing the professional portfolio of the user. "
+                "1. **Identity**: Refer to the portfolio owner by their FIRST NAME (e.g., 'Akshay', 'Sarah') instead of 'the individual' or 'the candidate'. "
+                "2. **Unknowns**: If the specific information (like Salary, Age, Address) is not clearly in the context, explicitly say: 'I don't have that information.' DO NOT guess. "
+                "3. **Tone**: Professional, confident, and direct. "
+                "4. **Scope**: Answer strictly based on the provided context below.\n\n"
+                "{context}"
             )
             
             prompt = ChatPromptTemplate.from_messages([
