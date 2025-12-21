@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .env
 .pytest_cache/
+ecosystem.config.js
 
 # Node
 node_modules/
