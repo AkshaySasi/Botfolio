@@ -14,6 +14,8 @@ import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import PortfolioManagePage from './pages/PortfolioManagePage';
+import PricingPage from './pages/PricingPage';
+import CheckoutPage from './pages/CheckoutPage';
 
 // Admin Pages
 import AdminLayout from './layouts/AdminLayout';
@@ -70,6 +72,12 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/p/:customUrl" element={<PublicPortfolioPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/checkout" element={
+            <ProtectedRoute>
+              <CheckoutPage />
+            </ProtectedRoute>
+          } />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>

@@ -110,6 +110,24 @@ const DashboardPage = () => {
               </div>
             </div>
 
+            {/* Upgrade Banner for Free Tier */}
+            {user?.subscription_tier === 'free' && (
+              <div className="mb-8 p-6 bg-gradient-to-r from-emerald-500/20 via-lime-500/20 to-emerald-500/20 border border-emerald-500/30 rounded-xl animate-pulse-slow">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">🚀 Upgrade to do more</h3>
+                    <p className="text-gray-300">Create up to 5 portfolios and get 50 queries per day with Starter plan</p>
+                  </div>
+                  <Button
+                    onClick={() => navigate('/pricing')}
+                    className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-semibold whitespace-nowrap"
+                  >
+                    View Plans →
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Create New Button */}
             {canCreateMore() ? (
               <Button

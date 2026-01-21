@@ -27,11 +27,12 @@ const Navbar = () => {
 
     return (
         <nav className="border-b border-emerald-500/20 backdrop-blur-sm bg-black/50 sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-8">
-                    <Link to="/" className="flex items-center gap-2">
-                        <img src="/assets/botfolio-logo-transparent.png" alt="Botiee" className="w-10 h-10 object-contain" />
-                        <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+                <div className="flex items-center justify-between">
+                    {/* Logo */}
+                    <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+                        <img src="/assets/botfolio-logo-transparent.png" alt="Botiee" className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
+                        <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
                     </Link>
 
                     {/* Desktop Navigation Links */}
@@ -43,37 +44,38 @@ const Navbar = () => {
                         <Link to="/dashboard" className={`text-sm font-medium transition-colors ${location.pathname === '/dashboard' ? 'text-emerald-400' : 'text-gray-300 hover:text-emerald-400'}`}>
                             Dashboard
                         </Link>
+
+                        {/* Admin Link */}
+                        {user?.is_admin && (
+                            <Link to="/admin" className="text-emerald-400 hover:text-emerald-300 font-semibold border border-emerald-500/30 px-3 py-1 rounded-full bg-emerald-500/10 text-xs">
+                                Admin
+                            </Link>
+                        )}
                     </div>
 
-                    {/* Admin Link */}
-                    {user?.is_admin && (
-                        <Link to="/admin" className="hidden md:block text-emerald-400 hover:text-emerald-300 font-semibold border border-emerald-500/30 px-3 py-1 rounded-full bg-emerald-500/10 text-xs">
-                            Admin
-                        </Link>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-4">
-                    {user ? (
-                        <>
-                            <span className="text-gray-400 text-sm hidden lg:block">{user.email}</span>
-                            <Button variant="ghost" size="sm" onClick={() => navigate('/settings')} className="text-gray-300 hover:text-emerald-400">
-                                <Settings className="w-5 h-5" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={logout} className="text-gray-300 hover:text-red-400">
-                                <LogOut className="w-5 h-5" />
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <Button variant="ghost" onClick={() => navigate('/login')} className="text-gray-300 hover:text-emerald-400">
-                                Login
-                            </Button>
-                            <Button onClick={() => navigate('/register')} className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-semibold">
-                                Get Started
-                            </Button>
-                        </>
-                    )}
+                    {/* Auth Buttons */}
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        {user ? (
+                            <>
+                                <span className="text-gray-400 text-sm hidden lg:block">{user.email}</span>
+                                <Button variant="ghost" size="sm" onClick={() => navigate('/settings')} className="text-gray-300 hover:text-emerald-400 p-2">
+                                    <Settings className="w-5 h-5" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={logout} className="text-gray-300 hover:text-red-400 p-2">
+                                    <LogOut className="w-5 h-5" />
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Button variant="ghost" onClick={() => navigate('/login')} className="text-gray-300 hover:text-emerald-400 text-sm sm:text-base px-2 sm:px-4">
+                                    Login
+                                </Button>
+                                <Button onClick={() => navigate('/register')} className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-semibold text-sm sm:text-base px-3 sm:px-4">
+                                    Get Started
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Mobile Menu Button */}
