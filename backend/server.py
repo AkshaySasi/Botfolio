@@ -3,6 +3,14 @@ from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, sta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase_client import supabase
+import os
+import logging
+import uuid
+import shutil
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional
 
 
 # JWT Configuration
