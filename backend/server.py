@@ -483,8 +483,8 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
             ],
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
+
+
         supabase.table("chat_sessions").insert(session_data).execute()
         
         return ChatResponse(response=response)
