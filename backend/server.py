@@ -1,16 +1,39 @@
-import asyncio
-from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase_client import supabase
 import os
+import sys
 import logging
-import uuid
-import shutil
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+import asyncio
+
+# Setup logging immediately to catch import errors
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logger = logging.getLogger("server_startup")
+logger.info("Initializing server...")
+
+try:
+    from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from supabase_client import supabase
+    import uuid
+    import shutil
+    from datetime import datetime, timezone, timedelta
+    from pathlib import Path
+    from pydantic import BaseModel, Field, ConfigDict, EmailStr
+    from typing import List, Optional
+    
+    # Import RAG engine with error handling
+    try:
+        from rag_engine import setup_rag_chain, query_chatbot
+        logger.info("RAG Engine imported successfully")
+    except ImportError as e:
+        logger.error(f"Failed to import rag_engine: {e}")
+        # dummy functions to prevent NameError at runtime if RAG fails
+        def setup_rag_chain(*args, **kwargs): pass
+        def query_chatbot(*args, **kwargs): return "Chatbot unavailable"
+
+except Exception as e:
+    logger.critical(f"CRITICAL ERROR during imports: {e}")
+    sys.exit(1)
+
 
 
 # JWT Configuration
