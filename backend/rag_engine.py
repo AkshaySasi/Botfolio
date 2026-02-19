@@ -6,10 +6,24 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
+
+try:
+    from langchain.chains import create_retrieval_chain
+    from langchain.chains.combine_documents import create_stuff_documents_chain
+except ImportError:
+    # Fallback for different versions or if module missing
+    try:
+        from langchain.chains.retrieval import create_retrieval_chain
+        from langchain.chains.combine_documents import create_stuff_documents_chain
+    except ImportError:
+        import logging
+        logging.getLogger(__name__).error("Could not import langchain chains. RAG will not work.")
+        create_retrieval_chain = None
+        create_stuff_documents_chain = None
+
+from langchain_community.vectorstores import FAISS
+
 load_dotenv()
 
 
@@ -133,6 +147,9 @@ def setup_rag_chain(portfolio_id: str, resume_path: Optional[str] = None, detail
             ("human", "{input}")
         ])
         
+        if not create_retrieval_chain or not create_stuff_documents_chain:
+             raise ImportError("LangChain chains not imported correctly.")
+
         question_answer_chain = create_stuff_documents_chain(llm, prompt)
         rag_chain = create_retrieval_chain(retriever, question_answer_chain)
         
