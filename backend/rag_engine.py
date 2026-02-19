@@ -6,8 +6,8 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_classic.chains import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
 load_dotenv()

@@ -33,7 +33,6 @@ idna
 jsonpatch
 jsonpointer
 langchain
-langchain-classic
 langchain-community
 langchain-core
 langchain-google-genai

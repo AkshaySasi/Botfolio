@@ -18,6 +18,9 @@ security = HTTPBearer()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+logger.info("Server is starting up...")
+
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
