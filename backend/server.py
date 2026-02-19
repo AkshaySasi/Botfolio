@@ -1,29 +1,9 @@
+import asyncio
 from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-import os
-import logging
-import uuid
-import shutil
-from dotenv import load_dotenv
-import bcrypt
-import jwt
+from supabase_client import supabase
 
-# Import RAG engine
-from rag_engine import setup_rag_chain, query_chatbot
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'botiee_db')]
 
 # JWT Configuration
 SECRET_KEY = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
@@ -141,10 +121,14 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 async def get_current_user(payload: dict = Depends(verify_token)):
-    user = await db.users.find_one({"id": payload.get("user_id")}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return User(**user)
+    try:
+        response = supabase.table("users").select("*").eq("id", payload.get("user_id")).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        return User(**response.data)
+    except Exception as e:
+        logger.error(f"Auth Error: {e}")
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -162,8 +146,8 @@ async def check_admin(current_user: User = Depends(get_current_user)):
 @app.post("/api/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
     # Check if user exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
+    existing = supabase.table("users").select("email").eq("email", user_data.email).execute()
+    if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create user
@@ -178,7 +162,7 @@ async def register(user_data: UserCreate):
     user_dict['password_hash'] = hashed_pwd
     user_dict['created_at'] = user_dict['created_at'].isoformat()
     
-    await db.users.insert_one(user_dict)
+    supabase.table("users").insert(user_dict).execute()
     
     # Create token
     token = create_access_token({"user_id": user.id, "email": user.email})
@@ -190,7 +174,9 @@ async def register(user_data: UserCreate):
 
 @app.post("/api/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    response = supabase.table("users").select("*").eq("email", credentials.email).execute()
+    user = response.data[0] if response.data else None
+    
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
@@ -228,8 +214,8 @@ async def create_portfolio(
         raise HTTPException(status_code=403, detail="Free tier allows only 1 portfolio. Upgrade to create more.")
     
     # Check if custom_url is unique
-    existing = await db.portfolios.find_one({"custom_url": custom_url})
-    if existing:
+    existing = supabase.table("portfolios").select("custom_url").eq("custom_url", custom_url).execute()
+    if existing.data:
         raise HTTPException(status_code=400, detail="This URL is already taken")
     
     # Save files
@@ -264,21 +250,18 @@ async def create_portfolio(
     portfolio_dict = portfolio.model_dump()
     portfolio_dict['created_at'] = portfolio_dict['created_at'].isoformat()
     
-    await db.portfolios.insert_one(portfolio_dict)
+    await asyncio.to_thread(lambda: supabase.table("portfolios").insert(portfolio_dict).execute())
     
     # Update user portfolio count
-    await db.users.update_one(
-        {"id": current_user.id},
-        {"$inc": {"portfolios_count": 1}}
-    )
+    # Supabase doesn't have $inc, so we strictly should use a function or read-modify-write.
+    # For now, simple update since we have the user object
+    new_count = current_user.portfolios_count + 1
+    supabase.table("users").update({"portfolios_count": new_count}).eq("id", current_user.id).execute()
     
     # Trigger AI processing in background
     try:
-        setup_rag_chain(portfolio_id, str(resume_path) if resume_path else None, str(details_path) if details_path else None, text_content)
-        await db.portfolios.update_one(
-            {"id": portfolio_id},
-            {"$set": {"is_processed": True}}
-        )
+        await asyncio.to_thread(setup_rag_chain, portfolio_id, str(resume_path) if resume_path else None, str(details_path) if details_path else None, text_content)
+        supabase.table("portfolios").update({"is_processed": True}).eq("id", portfolio_id).execute()
     except Exception as e:
         logger.error(f"RAG setup error for portfolio {portfolio_id}: {e}")
     
@@ -286,7 +269,8 @@ async def create_portfolio(
 
 @app.get("/api/portfolios", response_model=List[Portfolio])
 async def get_portfolios(current_user: User = Depends(get_current_user)):
-    portfolios = await db.portfolios.find({"user_id": current_user.id}, {"_id": 0}).to_list(100)
+    response = supabase.table("portfolios").select("*").eq("user_id", current_user.id).execute()
+    portfolios = response.data
     
     for p in portfolios:
         if isinstance(p.get('created_at'), str):
@@ -296,7 +280,8 @@ async def get_portfolios(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/portfolios/{portfolio_id}", response_model=Portfolio)
 async def get_portfolio(portfolio_id: str, current_user: User = Depends(get_current_user)):
-    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id}, {"_id": 0})
+    response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    portfolio = response.data if response.data else None
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
     
@@ -307,7 +292,8 @@ async def get_portfolio(portfolio_id: str, current_user: User = Depends(get_curr
 
 @app.delete("/api/portfolios/{portfolio_id}")
 async def delete_portfolio(portfolio_id: str, current_user: User = Depends(get_current_user)):
-    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id})
+    response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    portfolio = response.data if response.data else None
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
     
@@ -322,13 +308,11 @@ async def delete_portfolio(portfolio_id: str, current_user: User = Depends(get_c
         shutil.rmtree(vector_dir)
     
     # Delete from DB
-    await db.portfolios.delete_one({"id": portfolio_id})
+    supabase.table("portfolios").delete().eq("id", portfolio_id).execute()
     
     # Update user portfolio count
-    await db.users.update_one(
-        {"id": current_user.id},
-        {"$inc": {"portfolios_count": -1}}
-    )
+    new_count = max(0, current_user.portfolios_count - 1)
+    supabase.table("users").update({"portfolios_count": new_count}).eq("id", current_user.id).execute()
     
     return {"message": "Portfolio deleted successfully"}
 
@@ -353,10 +337,7 @@ async def update_portfolio(
         update_data['is_active'] = is_active
     
     if update_data:
-        await db.portfolios.update_one(
-            {"id": portfolio_id},
-            {"$set": update_data}
-        )
+        supabase.table("portfolios").update(update_data).eq("id", portfolio_id).execute()
     
     return {"message": "Portfolio updated successfully"}
 
@@ -378,10 +359,7 @@ async def update_portfolio_files(
         resume_path = upload_dir / f"resume_{resume.filename}"
         with open(resume_path, "wb") as f:
             shutil.copyfileobj(resume.file, f)
-        await db.portfolios.update_one(
-            {"id": portfolio_id},
-            {"$set": {"resume_path": str(resume_path)}}
-        )
+        supabase.table("portfolios").update({"resume_path": str(resume_path)}).eq("id", portfolio_id).execute()
         portfolio['resume_path'] = str(resume_path)
     
     # Update details if provided
@@ -389,10 +367,7 @@ async def update_portfolio_files(
         details_path = upload_dir / f"details_{details.filename}"
         with open(details_path, "wb") as f:
             shutil.copyfileobj(details.file, f)
-        await db.portfolios.update_one(
-            {"id": portfolio_id},
-            {"$set": {"details_path": str(details_path)}}
-        )
+        supabase.table("portfolios").update({"details_path": str(details_path)}).eq("id", portfolio_id).execute()
         portfolio['details_path'] = str(details_path)
     
     # Retrain chatbot
@@ -413,8 +388,10 @@ async def get_analytics(portfolio_id: str, current_user: User = Depends(get_curr
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
     
+    
     # Get chat sessions
-    sessions = await db.chat_sessions.find({"portfolio_id": portfolio_id}, {"_id": 0}).to_list(1000)
+    response = supabase.table("chat_sessions").select("*").eq("portfolio_id", portfolio_id).execute()
+    sessions = response.data
     
     total_chats = len(sessions)
     total_messages = sum(len(s.get('messages', [])) for s in sessions)
@@ -429,12 +406,14 @@ async def get_analytics(portfolio_id: str, current_user: User = Depends(get_curr
 
 @app.get("/api/public/{custom_url}", response_model=PortfolioPublic)
 async def get_public_portfolio(custom_url: str):
-    portfolio = await db.portfolios.find_one({"custom_url": custom_url}, {"_id": 0})
+    response = supabase.table("portfolios").select("*").eq("custom_url", custom_url).single().execute()
+    portfolio = response.data if response.data else None
     if not portfolio or not portfolio.get('is_active'):
         raise HTTPException(status_code=404, detail="Portfolio not found")
     
     # Get owner info
-    user = await db.users.find_one({"id": portfolio['user_id']}, {"_id": 0})
+    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).single().execute()
+    user = user_resp.data if user_resp.data else None
     
     return PortfolioPublic(
         name=portfolio['name'],
@@ -445,12 +424,14 @@ async def get_public_portfolio(custom_url: str):
 
 @app.post("/api/chat/{custom_url}", response_model=ChatResponse)
 async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
-    portfolio = await db.portfolios.find_one({"custom_url": custom_url}, {"_id": 0})
+    response = supabase.table("portfolios").select("*").eq("custom_url", custom_url).single().execute()
+    portfolio = response.data if response.data else None
     if not portfolio or not portfolio.get('is_active') or not portfolio.get('is_processed'):
         raise HTTPException(status_code=404, detail="Portfolio chatbot not available")
     
     # Get owner to check limits
-    user = await db.users.find_one({"id": portfolio['user_id']})
+    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).single().execute()
+    user = user_resp.data if user_resp.data else None
     if not user:
         raise HTTPException(status_code=404, detail="Portfolio owner not found")
         
@@ -462,7 +443,7 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
         last_date = user['last_query_date'].replace(tzinfo=timezone.utc) if user['last_query_date'].tzinfo is None else user['last_query_date']
         if last_date.date() < now.date():
             user['daily_queries_count'] = 0
-            await db.users.update_one({"id": user['id']}, {"$set": {"daily_queries_count": 0}})
+            supabase.table("users").update({"daily_queries_count": 0}).eq("id", user['id']).execute()
 
     # Check limits
     daily_limit = 5 # Default Free
@@ -481,10 +462,11 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
              raise HTTPException(status_code=402, detail="Portfolio subscription expired")
 
     # Increment usage
-    await db.users.update_one(
-        {"id": user['id']},
-        {"$inc": {"daily_queries_count": 1}, "$set": {"last_query_date": now}}
-    )
+    new_daily_count = user.get('daily_queries_count', 0) + 1
+    supabase.table("users").update({
+        "daily_queries_count": new_daily_count,
+        "last_query_date": now.isoformat()
+    }).eq("id", user['id']).execute()
 
     # Query RAG
     try:
@@ -501,7 +483,9 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
             ],
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.chat_sessions.insert_one(session_data)
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        supabase.table("chat_sessions").insert(session_data).execute()
         
         return ChatResponse(response=response)
     except Exception as e:
@@ -564,16 +548,11 @@ async def verify_payment(data: PaymentVerification, current_user: User = Depends
         
         # Update User Subscription
         expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        await db.users.update_one(
-            {"id": current_user.id},
-            {
-                "$set": {
-                    "subscription_tier": data.plan_id,
-                    "subscription_expiry": expiry,
-                    "daily_queries_count": 0 # Reset count on upgrade
-                }
-            }
-        )
+        supabase.table("users").update({
+            "subscription_tier": data.plan_id,
+            "subscription_expiry": expiry.isoformat(),
+            "daily_queries_count": 0 # Reset count on upgrade
+        }).eq("id", current_user.id).execute()
         return {"status": "success", "tier": data.plan_id}
         
     except razorpay.errors.SignatureVerificationError:
@@ -587,8 +566,11 @@ async def verify_payment(data: PaymentVerification, current_user: User = Depends
 
 @app.get("/api/admin/stats")
 async def get_admin_stats(current_user: User = Depends(check_admin)):
-    total_users = await db.users.count_documents({})
-    total_portfolios = await db.portfolios.count_documents({})
+    total_users_resp = supabase.table("users").select("*", count="exact").execute()
+    total_users = total_users_resp.count
+    
+    total_portfolios_resp = supabase.table("portfolios").select("*", count="exact").execute()
+    total_portfolios = total_portfolios_resp.count
     # Revenue is mocked for now as we don't have payments yet
     revenue = 0 
     pending_approvals = 0
@@ -602,7 +584,8 @@ async def get_admin_stats(current_user: User = Depends(check_admin)):
 
 @app.get("/api/admin/users", response_model=List[User])
 async def get_all_users(limit: int = 100, current_user: User = Depends(check_admin)):
-    users = await db.users.find({}, {"_id": 0}).to_list(limit)
+    response = supabase.table("users").select("*").limit(limit).execute()
+    users = response.data
     return users
 
 @app.put("/api/admin/users/{user_id}")
@@ -611,7 +594,7 @@ async def update_user_admin(user_id: str, updates: UserUpdate, current_user: Use
     if not update_data:
         return {"message": "No updates provided"}
         
-    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    await asyncio.to_thread(lambda: supabase.table("users").update(update_data).eq("id", user_id).execute())
     return {"message": "User updated successfully"}
 
 # ===== CONTACT/MESSAGES =====
@@ -624,12 +607,15 @@ class ContactMessage(BaseModel):
 
 @app.post("/api/contact")
 async def submit_contact(msg: ContactMessage):
-    await db.messages.insert_one(msg.model_dump())
+    data = msg.model_dump()
+    data['created_at'] = data['created_at'].isoformat()
+    supabase.table("messages").insert(data).execute()
     return {"message": "Message received"}
 
 @app.get("/api/admin/messages")
 async def get_messages(current_user: User = Depends(check_admin)):
-    messages = await db.messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    response = supabase.table("messages").select("*").order("created_at", desc=True).limit(100).execute()
+    messages = response.data
     return messages
 
 # ===== HEALTH CHECK =====
@@ -639,5 +625,6 @@ async def health():
     return {"status": "healthy"}
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown_client():
+    # Supabase client doesn't need explicit close
+    pass
