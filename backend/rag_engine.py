@@ -10,11 +10,13 @@ from dotenv import load_dotenv
 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import FAISS
+from google import genai as google_genai
 
 load_dotenv()
 
@@ -30,8 +32,47 @@ else:
     os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
     logger.info("Gemini API key loaded successfully.")
 
-MODEL_NAME = "gemini-2.5-flash"           # LLM for chat responses
-EMBEDDING_MODEL = "models/embedding-001"  # works across all API versions
+MODEL_NAME = "gemini-2.5-flash"       # LLM for chat responses
+EMBEDDING_MODEL = "text-embedding-004" # Embedding model via google-genai SDK
+
+
+class GeminiEmbeddings(Embeddings):
+    """
+    Custom embeddings using google-genai SDK directly.
+    Bypasses the langchain-google-genai wrapper which incorrectly
+    calls batchEmbedContents on v1beta (unsupported for these models).
+    """
+    def __init__(self, model_name: str = EMBEDDING_MODEL):
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self._client = google_genai.Client(api_key=api_key)
+        self._model = model_name
+
+    def embed_documents(self, texts: list) -> list:
+        """Embed a list of documents."""
+        if not texts:
+            return []
+        try:
+            result = self._client.models.embed_content(
+                model=self._model,
+                contents=texts
+            )
+            return [e.values for e in result.embeddings]
+        except Exception as e:
+            logger.error(f"Batch embedding error: {e}. Falling back to single embed.")
+            # Fallback: embed one at a time
+            embeddings = []
+            for text in texts:
+                r = self._client.models.embed_content(model=self._model, contents=text)
+                embeddings.append(r.embeddings[0].values)
+            return embeddings
+
+    def embed_query(self, text: str) -> list:
+        """Embed a single query string."""
+        result = self._client.models.embed_content(
+            model=self._model,
+            contents=text
+        )
+        return result.embeddings[0].values
 
 # In-memory cache mapping portfolio_id -> rag_chain
 rag_chains = {}
@@ -168,7 +209,7 @@ def setup_rag_chain(
         split_docs = text_splitter.split_documents(docs)
         logger.info(f"Split into {len(split_docs)} chunks")
 
-        embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
+        embeddings = GeminiEmbeddings()
         vectorstore = FAISS.from_documents(documents=split_docs, embedding=embeddings)
 
         # Persist to Supabase Storage
@@ -187,7 +228,7 @@ def query_chatbot(portfolio_id: str, message: str) -> str:
     """Query a portfolio's chatbot. Loads from Supabase Storage if not in memory."""
     try:
         if portfolio_id not in rag_chains:
-            embeddings = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
+            embeddings = GeminiEmbeddings()
             vectorstore = _load_faiss_from_storage(portfolio_id, embeddings)
             if not vectorstore:
                 raise ValueError(f"Portfolio {portfolio_id} chatbot not found. Please re-upload files.")
