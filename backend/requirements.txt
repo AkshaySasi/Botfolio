@@ -70,6 +70,7 @@ python-dotenv
 python-jose
 python-multipart
 pytz
+razorpay
 requests
 requests-oauthlib
 requests-toolbelt
