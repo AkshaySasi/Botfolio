@@ -24,7 +24,7 @@ try:
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     from pydantic import BaseModel, Field, ConfigDict, EmailStr
     from typing import List, Optional
-    from supabase_client import supabase
+    from supabase_client import supabase, supabase_admin
     from slowapi import Limiter, _rate_limit_exceeded_handler
     from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
@@ -174,24 +174,23 @@ def validate_custom_url(custom_url: str) -> str:
     return url
 
 def upload_file_to_storage(file_bytes: bytes, path: str, content_type: str = "application/octet-stream") -> str:
-    """Upload a file to Supabase Storage and return public URL."""
+    """Upload a file to Supabase Storage and return public URL. Uses service_role client."""
     try:
-        supabase.storage.from_(STORAGE_FILES_BUCKET).upload(
+        supabase_admin.storage.from_(STORAGE_FILES_BUCKET).upload(
             path, file_bytes, {"content-type": content_type, "upsert": "true"}
         )
-        result = supabase.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
+        result = supabase_admin.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
         return result
     except Exception as e:
         err_str = str(e)
         logger.error(f"Storage upload error for {path}: {err_str}")
-        # Surface helpful messages for common causes
         if "Bucket not found" in err_str or "does not exist" in err_str.lower():
             raise HTTPException(
                 status_code=500,
-                detail="Storage bucket 'portfolio-files' not found. Please create it in your Supabase dashboard under Storage → New Bucket (set Public: ON)."
+                detail="Storage bucket 'portfolio-files' not found. Create it in Supabase Dashboard → Storage → New Bucket (Public: ON)."
             )
         if "Unauthorized" in err_str or "403" in err_str:
-            raise HTTPException(status_code=500, detail="Storage permission denied. Check your Supabase Storage bucket policies.")
+            raise HTTPException(status_code=500, detail="Storage permission denied. Make sure SUPABASE_SERVICE_KEY is set in Render environment variables.")
         raise HTTPException(status_code=500, detail=f"File upload failed: {err_str[:200]}")
 
 # =============================================
@@ -418,19 +417,19 @@ async def delete_portfolio(portfolio_id: str, current_user: User = Depends(get_c
 
     # Delete files from Supabase Storage
     try:
-        files = supabase.storage.from_(STORAGE_FILES_BUCKET).list(portfolio_id)
+        files = supabase_admin.storage.from_(STORAGE_FILES_BUCKET).list(portfolio_id)
         if files:
             paths = [f"{portfolio_id}/{f['name']}" for f in files]
-            supabase.storage.from_(STORAGE_FILES_BUCKET).remove(paths)
+            supabase_admin.storage.from_(STORAGE_FILES_BUCKET).remove(paths)
     except Exception as e:
         logger.warning(f"Could not delete storage files for {portfolio_id}: {e}")
 
     # Delete vector store files from storage
     try:
-        idx_files = supabase.storage.from_(STORAGE_INDEXES_BUCKET).list(portfolio_id)
+        idx_files = supabase_admin.storage.from_(STORAGE_INDEXES_BUCKET).list(portfolio_id)
         if idx_files:
             paths = [f"{portfolio_id}/{f['name']}" for f in idx_files]
-            supabase.storage.from_(STORAGE_INDEXES_BUCKET).remove(paths)
+            supabase_admin.storage.from_(STORAGE_INDEXES_BUCKET).remove(paths)
     except Exception as e:
         logger.warning(f"Could not delete index files for {portfolio_id}: {e}")
 

@@ -43,10 +43,10 @@ VECTOR_CACHE_DIR.mkdir(exist_ok=True)
 STORAGE_INDEXES_BUCKET = "portfolio-indexes"
 
 
-def _get_supabase():
-    """Lazy import supabase client to avoid circular imports."""
-    from supabase_client import supabase
-    return supabase
+def _get_supabase_admin():
+    """Lazy import supabase admin client (service_role) to avoid circular imports."""
+    from supabase_client import supabase_admin
+    return supabase_admin
 
 
 def _save_faiss_to_storage(portfolio_id: str, vectorstore: FAISS):
@@ -54,14 +54,14 @@ def _save_faiss_to_storage(portfolio_id: str, vectorstore: FAISS):
     tmp_dir = tempfile.mkdtemp()
     try:
         vectorstore.save_local(tmp_dir)
-        supabase = _get_supabase()
+        supabase_admin = _get_supabase_admin()
         for fname in ["index.faiss", "index.pkl"]:
             fpath = os.path.join(tmp_dir, fname)
             if os.path.exists(fpath):
                 with open(fpath, "rb") as f:
                     data = f.read()
                 storage_path = f"{portfolio_id}/{fname}"
-                supabase.storage.from_(STORAGE_INDEXES_BUCKET).upload(
+                supabase_admin.storage.from_(STORAGE_INDEXES_BUCKET).upload(
                     storage_path, data, {"upsert": "true"}
                 )
         logger.info(f"FAISS index saved to Supabase Storage for {portfolio_id}")
@@ -75,10 +75,10 @@ def _load_faiss_from_storage(portfolio_id: str, embeddings) -> Optional[FAISS]:
     """Download FAISS index files from Supabase Storage and load locally."""
     tmp_dir = tempfile.mkdtemp()
     try:
-        supabase = _get_supabase()
+        supabase_admin = _get_supabase_admin()
         for fname in ["index.faiss", "index.pkl"]:
             storage_path = f"{portfolio_id}/{fname}"
-            file_bytes = supabase.storage.from_(STORAGE_INDEXES_BUCKET).download(storage_path)
+            file_bytes = supabase_admin.storage.from_(STORAGE_INDEXES_BUCKET).download(storage_path)
             with open(os.path.join(tmp_dir, fname), "wb") as f:
                 f.write(file_bytes)
         vectorstore = FAISS.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
