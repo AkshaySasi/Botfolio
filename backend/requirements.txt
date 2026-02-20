@@ -76,6 +76,7 @@ requests-oauthlib
 requests-toolbelt
 rsa
 six
+slowapi
 sniffio
 SQLAlchemy
 starlette

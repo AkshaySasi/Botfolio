@@ -1,7 +1,10 @@
 import os
 import sys
+import re
+import io
 import logging
 import asyncio
+import tempfile
 
 # Setup logging immediately to catch import errors
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
@@ -9,24 +12,29 @@ logger = logging.getLogger("server_startup")
 logger.info("Initializing server...")
 
 try:
-    from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status
-    from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-    from supabase_client import supabase
     import uuid
     import shutil
+    import bcrypt
+    import jwt
+    import razorpay
     from datetime import datetime, timezone, timedelta
     from pathlib import Path
+    from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status, Request, BackgroundTasks
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     from pydantic import BaseModel, Field, ConfigDict, EmailStr
     from typing import List, Optional
-    
+    from supabase_client import supabase
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+
     # Import RAG engine with error handling
     try:
         from rag_engine import setup_rag_chain, query_chatbot
         logger.info("RAG Engine imported successfully")
     except ImportError as e:
         logger.error(f"Failed to import rag_engine: {e}")
-        # dummy functions to prevent NameError at runtime if RAG fails
         def setup_rag_chain(*args, **kwargs): pass
         def query_chatbot(*args, **kwargs): return "Chatbot unavailable"
 
@@ -34,48 +42,62 @@ except Exception as e:
     logger.critical(f"CRITICAL ERROR during imports: {e}")
     sys.exit(1)
 
+# =============================================
+# APP SETUP
+# =============================================
 
-
-# JWT Configuration
 SECRET_KEY = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-# Create the main app
-app = FastAPI(title="Botiee API", version="1.0.0")
+ROOT_DIR = Path(__file__).parent
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="Botfolio API", version="2.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 security = HTTPBearer()
 
-# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 logger.info("Server is starting up...")
 
+# Supabase Storage bucket names
+STORAGE_FILES_BUCKET = "portfolio-files"
+STORAGE_INDEXES_BUCKET = "portfolio-indexes"
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://mybotfolio.vercel.app').split(','),
+    allow_origins=os.environ.get(
+        'CORS_ORIGINS',
+        'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://mybotfolio.vercel.app'
+    ).split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ===== MODELS =====
+# =============================================
+# MODELS
+# =============================================
 
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: EmailStr
     name: str
-    auth_provider: str = "email"  # email or google
+    auth_provider: str = "email"
     google_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    subscription_tier: str = "free"  # free, pro, enterprise
+    subscription_tier: str = "free"
     portfolios_count: int = 0
     is_admin: bool = False
-    subscription_expiry: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30))
+    subscription_expiry: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30)
+    )
     daily_queries_count: int = 0
     last_query_date: Optional[datetime] = None
 
@@ -95,8 +117,8 @@ class UserLogin(BaseModel):
     password: str
 
 class GoogleAuthRequest(BaseModel):
-    credential: str  # Google OAuth token
-    
+    credential: str
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -104,13 +126,12 @@ class TokenResponse(BaseModel):
 
 class Portfolio(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     name: str
     custom_url: str
-    resume_path: Optional[str] = None
-    details_path: Optional[str] = None
+    resume_url: Optional[str] = None    # Supabase Storage public URL
+    details_url: Optional[str] = None  # Supabase Storage public URL
     text_content: Optional[str] = None
     is_active: bool = True
     is_processed: bool = False
@@ -119,8 +140,6 @@ class Portfolio(BaseModel):
     chatbot_config: dict = Field(default_factory=dict)
     custom_domain: Optional[str] = None
 
-
-
 class ChatMessage(BaseModel):
     portfolio_url: str
     message: str
@@ -128,21 +147,53 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    
+
 class PortfolioPublic(BaseModel):
     name: str
     custom_url: str
     owner_name: str
     is_active: bool
 
-# ===== AUTH UTILITIES =====
+# =============================================
+# HELPERS
+# =============================================
+
+CUSTOM_URL_PATTERN = re.compile(r'^[a-z0-9][a-z0-9\-]{1,48}[a-z0-9]$')
+
+def validate_custom_url(custom_url: str) -> str:
+    """Validate and sanitize custom URL slug."""
+    url = custom_url.lower().strip()
+    url = re.sub(r'[^a-z0-9\-]', '-', url)  # replace invalid chars with dash
+    url = re.sub(r'-+', '-', url)            # collapse multiple dashes
+    url = url.strip('-')
+    if not CUSTOM_URL_PATTERN.match(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Custom URL must be 3-50 characters, lowercase letters, numbers, and hyphens only."
+        )
+    return url
+
+def upload_file_to_storage(file_bytes: bytes, path: str, content_type: str = "application/octet-stream") -> str:
+    """Upload a file to Supabase Storage and return public URL."""
+    try:
+        supabase.storage.from_(STORAGE_FILES_BUCKET).upload(
+            path, file_bytes, {"content-type": content_type, "upsert": "true"}
+        )
+        result = supabase.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
+        return result
+    except Exception as e:
+        logger.error(f"Storage upload error for {path}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload file")
+
+# =============================================
+# AUTH UTILITIES
+# =============================================
 
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -175,67 +226,99 @@ async def check_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
-# ===== AUTH ENDPOINTS =====
+# =============================================
+# AUTH ENDPOINTS
+# =============================================
 
 @app.post("/api/auth/register", response_model=TokenResponse)
 async def register(user_data: UserCreate):
-    # Check if user exists
     existing = supabase.table("users").select("email").eq("email", user_data.email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user
+
     hashed_pwd = hash_password(user_data.password)
-    user = User(
-        email=user_data.email,
-        name=user_data.name,
-        auth_provider="email"
-    )
-    
+    user = User(email=user_data.email, name=user_data.name, auth_provider="email")
+
     user_dict = user.model_dump()
     user_dict['password_hash'] = hashed_pwd
     user_dict['created_at'] = user_dict['created_at'].isoformat()
-    
+    if user_dict.get('subscription_expiry'):
+        user_dict['subscription_expiry'] = user_dict['subscription_expiry'].isoformat()
+
     supabase.table("users").insert(user_dict).execute()
-    
-    # Create token
     token = create_access_token({"user_id": user.id, "email": user.email})
-    
-    return TokenResponse(
-        access_token=token,
-        user=user.model_dump(mode='json')
-    )
+    return TokenResponse(access_token=token, user=user.model_dump(mode='json'))
 
 @app.post("/api/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     response = supabase.table("users").select("*").eq("email", credentials.email).execute()
     user = response.data[0] if response.data else None
-    
+
     if not user or not verify_password(credentials.password, user.get('password_hash', '')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     token = create_access_token({"user_id": user['id'], "email": user['email']})
     user_obj = User(**user)
-    
-    return TokenResponse(
-        access_token=token,
-        user=user_obj.model_dump(mode='json')
-    )
+    return TokenResponse(access_token=token, user=user_obj.model_dump(mode='json'))
 
 @app.post("/api/auth/google", response_model=TokenResponse)
 async def google_auth(auth_request: GoogleAuthRequest):
-    # For now, this is a placeholder
-
     raise HTTPException(status_code=501, detail="Google OAuth coming soon")
 
 @app.get("/api/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-# ===== PORTFOLIO ENDPOINTS =====
+# =============================================
+# PORTFOLIO ENDPOINTS
+# =============================================
+
+def _do_rag_setup(portfolio_id: str, resume_url: Optional[str], details_url: Optional[str], text_content: Optional[str]):
+    """
+    Background helper: download files from Supabase Storage into temp dir,
+    then run RAG setup, then mark portfolio as processed.
+    """
+    try:
+        temp_dir = tempfile.mkdtemp()
+        resume_path = None
+        details_path = None
+
+        if resume_url:
+            try:
+                file_bytes = supabase.storage.from_(STORAGE_FILES_BUCKET).download(
+                    resume_url.split(f"{STORAGE_FILES_BUCKET}/")[-1].split("?")[0]
+                )
+                ext = resume_url.split(".")[-1].split("?")[0]
+                resume_path = os.path.join(temp_dir, f"resume.{ext}")
+                with open(resume_path, "wb") as f:
+                    f.write(file_bytes)
+            except Exception as e:
+                logger.error(f"Failed to download resume: {e}")
+
+        if details_url:
+            try:
+                file_bytes = supabase.storage.from_(STORAGE_FILES_BUCKET).download(
+                    details_url.split(f"{STORAGE_FILES_BUCKET}/")[-1].split("?")[0]
+                )
+                details_path = os.path.join(temp_dir, "details.txt")
+                with open(details_path, "wb") as f:
+                    f.write(file_bytes)
+            except Exception as e:
+                logger.error(f"Failed to download details: {e}")
+
+        setup_rag_chain(portfolio_id, resume_path, details_path, text_content)
+        supabase.table("portfolios").update({"is_processed": True}).eq("id", portfolio_id).execute()
+        logger.info(f"Portfolio {portfolio_id} RAG setup complete.")
+
+        # Cleanup temp files
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    except Exception as e:
+        logger.error(f"Background RAG setup failed for {portfolio_id}: {e}")
+
 
 @app.post("/api/portfolios/create")
 async def create_portfolio(
+    background_tasks: BackgroundTasks,
     name: str = Form(...),
     custom_url: str = Form(...),
     text_content: Optional[str] = Form(None),
@@ -243,112 +326,112 @@ async def create_portfolio(
     details: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
 ):
-    # Check portfolio limit based on subscription
+    # Check portfolio limit
     if current_user.subscription_tier == "free" and current_user.portfolios_count >= 1:
         raise HTTPException(status_code=403, detail="Free tier allows only 1 portfolio. Upgrade to create more.")
-    
-    # Check if custom_url is unique
+
+    custom_url = validate_custom_url(custom_url)
+
+    # Check URL uniqueness
     existing = supabase.table("portfolios").select("custom_url").eq("custom_url", custom_url).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="This URL is already taken")
-    
-    # Save files
+
     portfolio_id = str(uuid.uuid4())
-    upload_dir = Path(ROOT_DIR) / "uploads" / portfolio_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    
-    resume_path = None
+    resume_url = None
+    details_url = None
+
+    # Upload resume to Supabase Storage
     if resume:
-        resume_path = upload_dir / f"resume_{resume.filename}"
-        with open(resume_path, "wb") as f:
-            shutil.copyfileobj(resume.file, f)
-            
-    details_path = None
+        file_bytes = await resume.read()
+        storage_path = f"{portfolio_id}/resume_{resume.filename}"
+        resume_url = upload_file_to_storage(file_bytes, storage_path, resume.content_type or "application/octet-stream")
+
+    # Upload details to Supabase Storage
     if details:
-        details_path = upload_dir / f"details_{details.filename}"
-        with open(details_path, "wb") as f:
-            shutil.copyfileobj(details.file, f)
-    
-    # Create portfolio
+        file_bytes = await details.read()
+        storage_path = f"{portfolio_id}/details_{details.filename}"
+        details_url = upload_file_to_storage(file_bytes, storage_path, details.content_type or "text/plain")
+
+    # Create portfolio record
     portfolio = Portfolio(
         id=portfolio_id,
         user_id=current_user.id,
         name=name,
         custom_url=custom_url,
-        resume_path=str(resume_path) if resume_path else None,
-        details_path=str(details_path) if details_path else None,
+        resume_url=resume_url,
+        details_url=details_url,
         text_content=text_content,
         is_processed=False
     )
-    
+
     portfolio_dict = portfolio.model_dump()
     portfolio_dict['created_at'] = portfolio_dict['created_at'].isoformat()
-    
+
     await asyncio.to_thread(lambda: supabase.table("portfolios").insert(portfolio_dict).execute())
-    
+
     # Update user portfolio count
-    # Supabase doesn't have $inc, so we strictly should use a function or read-modify-write.
-    # For now, simple update since we have the user object
     new_count = current_user.portfolios_count + 1
     supabase.table("users").update({"portfolios_count": new_count}).eq("id", current_user.id).execute()
-    
-    # Trigger AI processing in background
-    try:
-        await asyncio.to_thread(setup_rag_chain, portfolio_id, str(resume_path) if resume_path else None, str(details_path) if details_path else None, text_content)
-        supabase.table("portfolios").update({"is_processed": True}).eq("id", portfolio_id).execute()
-    except Exception as e:
-        logger.error(f"RAG setup error for portfolio {portfolio_id}: {e}")
-    
-    return {"message": "Portfolio created successfully", "portfolio_id": portfolio_id, "custom_url": custom_url}
+
+    # Trigger RAG setup in background (non-blocking)
+    background_tasks.add_task(_do_rag_setup, portfolio_id, resume_url, details_url, text_content)
+
+    return {"message": "Portfolio created. Chatbot is being trained...", "portfolio_id": portfolio_id, "custom_url": custom_url}
+
 
 @app.get("/api/portfolios", response_model=List[Portfolio])
 async def get_portfolios(current_user: User = Depends(get_current_user)):
     response = supabase.table("portfolios").select("*").eq("user_id", current_user.id).execute()
     portfolios = response.data
-    
     for p in portfolios:
         if isinstance(p.get('created_at'), str):
             p['created_at'] = datetime.fromisoformat(p['created_at'])
-    
     return portfolios
+
 
 @app.get("/api/portfolios/{portfolio_id}", response_model=Portfolio)
 async def get_portfolio(portfolio_id: str, current_user: User = Depends(get_current_user)):
     response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
-    portfolio = response.data if response.data else None
+    portfolio = response.data
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
     if isinstance(portfolio.get('created_at'), str):
         portfolio['created_at'] = datetime.fromisoformat(portfolio['created_at'])
-    
     return Portfolio(**portfolio)
+
 
 @app.delete("/api/portfolios/{portfolio_id}")
 async def delete_portfolio(portfolio_id: str, current_user: User = Depends(get_current_user)):
     response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
-    portfolio = response.data if response.data else None
-    if not portfolio:
+    if not response.data:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
-    # Delete files
-    upload_dir = Path(ROOT_DIR) / "uploads" / portfolio_id
-    if upload_dir.exists():
-        shutil.rmtree(upload_dir)
-    
-    # Delete vector store
-    vector_dir = Path(ROOT_DIR) / "vector_stores" / portfolio_id
-    if vector_dir.exists():
-        shutil.rmtree(vector_dir)
-    
-    # Delete from DB
+
+    # Delete files from Supabase Storage
+    try:
+        files = supabase.storage.from_(STORAGE_FILES_BUCKET).list(portfolio_id)
+        if files:
+            paths = [f"{portfolio_id}/{f['name']}" for f in files]
+            supabase.storage.from_(STORAGE_FILES_BUCKET).remove(paths)
+    except Exception as e:
+        logger.warning(f"Could not delete storage files for {portfolio_id}: {e}")
+
+    # Delete vector store files from storage
+    try:
+        idx_files = supabase.storage.from_(STORAGE_INDEXES_BUCKET).list(portfolio_id)
+        if idx_files:
+            paths = [f"{portfolio_id}/{f['name']}" for f in idx_files]
+            supabase.storage.from_(STORAGE_INDEXES_BUCKET).remove(paths)
+    except Exception as e:
+        logger.warning(f"Could not delete index files for {portfolio_id}: {e}")
+
     supabase.table("portfolios").delete().eq("id", portfolio_id).execute()
-    
-    # Update user portfolio count
+
     new_count = max(0, current_user.portfolios_count - 1)
     supabase.table("users").update({"portfolios_count": new_count}).eq("id", current_user.id).execute()
-    
+
     return {"message": "Portfolio deleted successfully"}
+
 
 @app.put("/api/portfolios/{portfolio_id}")
 async def update_portfolio(
@@ -358,10 +441,10 @@ async def update_portfolio(
     is_active: Optional[bool] = None,
     current_user: User = Depends(get_current_user)
 ):
-    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id})
-    if not portfolio:
+    response = supabase.table("portfolios").select("id").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    if not response.data:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
+
     update_data = {}
     if name is not None:
         update_data['name'] = name
@@ -369,133 +452,144 @@ async def update_portfolio(
         update_data['custom_domain'] = custom_domain
     if is_active is not None:
         update_data['is_active'] = is_active
-    
+
     if update_data:
         supabase.table("portfolios").update(update_data).eq("id", portfolio_id).execute()
-    
+
     return {"message": "Portfolio updated successfully"}
+
 
 @app.post("/api/portfolios/{portfolio_id}/update-files")
 async def update_portfolio_files(
     portfolio_id: str,
+    background_tasks: BackgroundTasks,
     resume: Optional[UploadFile] = File(None),
     details: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user)
 ):
-    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id})
+    response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    portfolio = response.data
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
-    upload_dir = Path(ROOT_DIR) / "uploads" / portfolio_id
-    
-    # Update resume if provided
+
+    resume_url = portfolio.get('resume_url')
+    details_url = portfolio.get('details_url')
+
     if resume:
-        resume_path = upload_dir / f"resume_{resume.filename}"
-        with open(resume_path, "wb") as f:
-            shutil.copyfileobj(resume.file, f)
-        supabase.table("portfolios").update({"resume_path": str(resume_path)}).eq("id", portfolio_id).execute()
-        portfolio['resume_path'] = str(resume_path)
-    
-    # Update details if provided
+        file_bytes = await resume.read()
+        storage_path = f"{portfolio_id}/resume_{resume.filename}"
+        resume_url = upload_file_to_storage(file_bytes, storage_path, resume.content_type or "application/octet-stream")
+        supabase.table("portfolios").update({"resume_url": resume_url}).eq("id", portfolio_id).execute()
+
     if details:
-        details_path = upload_dir / f"details_{details.filename}"
-        with open(details_path, "wb") as f:
-            shutil.copyfileobj(details.file, f)
-        supabase.table("portfolios").update({"details_path": str(details_path)}).eq("id", portfolio_id).execute()
-        portfolio['details_path'] = str(details_path)
-    
-    # Retrain chatbot
-    try:
-        setup_rag_chain(portfolio_id, portfolio['resume_path'], portfolio['details_path'])
-        await db.portfolios.update_one(
-            {"id": portfolio_id},
-            {"$set": {"is_processed": True}}
-        )
-        return {"message": "Portfolio files updated and chatbot retrained successfully"}
-    except Exception as e:
-        logger.error(f"Failed to retrain chatbot: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrain chatbot")
+        file_bytes = await details.read()
+        storage_path = f"{portfolio_id}/details_{details.filename}"
+        details_url = upload_file_to_storage(file_bytes, storage_path, details.content_type or "text/plain")
+        supabase.table("portfolios").update({"details_url": details_url}).eq("id", portfolio_id).execute()
+
+    # Mark unprocessed while retraining
+    supabase.table("portfolios").update({"is_processed": False}).eq("id", portfolio_id).execute()
+
+    # Retrain RAG in background
+    background_tasks.add_task(
+        _do_rag_setup, portfolio_id, resume_url, details_url, portfolio.get('text_content')
+    )
+
+    return {"message": "Files uploaded. Chatbot is being retrained..."}
+
 
 @app.get("/api/portfolios/{portfolio_id}/analytics")
 async def get_analytics(portfolio_id: str, current_user: User = Depends(get_current_user)):
-    portfolio = await db.portfolios.find_one({"id": portfolio_id, "user_id": current_user.id}, {"_id": 0})
-    if not portfolio:
+    # Verify ownership
+    p_resp = supabase.table("portfolios").select("id, analytics").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    if not p_resp.data:
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
-    
-    # Get chat sessions
-    response = supabase.table("chat_sessions").select("*").eq("portfolio_id", portfolio_id).execute()
-    sessions = response.data
-    
+
+    sessions_resp = supabase.table("chat_sessions").select("*").eq("portfolio_id", portfolio_id).execute()
+    sessions = sessions_resp.data or []
+
     total_chats = len(sessions)
     total_messages = sum(len(s.get('messages', [])) for s in sessions)
-    
+
     return {
         "total_chats": total_chats,
         "total_messages": total_messages,
-        "analytics": portfolio.get('analytics', {})
+        "analytics": p_resp.data.get('analytics', {})
     }
 
-# ===== PUBLIC ENDPOINTS =====
+# =============================================
+# PUBLIC ENDPOINTS
+# =============================================
 
 @app.get("/api/public/{custom_url}", response_model=PortfolioPublic)
 async def get_public_portfolio(custom_url: str):
     response = supabase.table("portfolios").select("*").eq("custom_url", custom_url).single().execute()
-    portfolio = response.data if response.data else None
+    portfolio = response.data
     if not portfolio or not portfolio.get('is_active'):
         raise HTTPException(status_code=404, detail="Portfolio not found")
-    
-    # Get owner info
-    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).single().execute()
-    user = user_resp.data if user_resp.data else None
-    
+
+    user_resp = supabase.table("users").select("name").eq("id", portfolio['user_id']).single().execute()
+    owner_name = user_resp.data.get('name', 'Portfolio Owner') if user_resp.data else 'Portfolio Owner'
+
     return PortfolioPublic(
         name=portfolio['name'],
         custom_url=portfolio['custom_url'],
-        owner_name=user.get('name', 'Portfolio Owner') if user else 'Portfolio Owner',
+        owner_name=owner_name,
         is_active=portfolio['is_active']
     )
 
+
 @app.post("/api/chat/{custom_url}", response_model=ChatResponse)
-async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
+@limiter.limit("10/minute")
+async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Request):
     response = supabase.table("portfolios").select("*").eq("custom_url", custom_url).single().execute()
-    portfolio = response.data if response.data else None
-    if not portfolio or not portfolio.get('is_active') or not portfolio.get('is_processed'):
-        raise HTTPException(status_code=404, detail="Portfolio chatbot not available")
-    
-    # Get owner to check limits
+    portfolio = response.data
+    if not portfolio or not portfolio.get('is_active'):
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    if not portfolio.get('is_processed'):
+        raise HTTPException(status_code=503, detail="Portfolio chatbot is still being trained. Please try again shortly.")
+
     user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).single().execute()
-    user = user_resp.data if user_resp.data else None
+    user = user_resp.data
     if not user:
         raise HTTPException(status_code=404, detail="Portfolio owner not found")
-        
-    # Check subscription & limits
+
     now = datetime.now(timezone.utc)
-    
+
     # Reset daily count if new day
     if user.get('last_query_date'):
-        last_date = user['last_query_date'].replace(tzinfo=timezone.utc) if user['last_query_date'].tzinfo is None else user['last_query_date']
-        if last_date.date() < now.date():
-            user['daily_queries_count'] = 0
-            supabase.table("users").update({"daily_queries_count": 0}).eq("id", user['id']).execute()
+        try:
+            last_date_str = user['last_query_date']
+            if isinstance(last_date_str, str):
+                last_date = datetime.fromisoformat(last_date_str.replace('Z', '+00:00'))
+            else:
+                last_date = last_date_str
+            if last_date.date() < now.date():
+                supabase.table("users").update({"daily_queries_count": 0}).eq("id", user['id']).execute()
+                user['daily_queries_count'] = 0
+        except Exception:
+            pass
 
-    # Check limits
-    daily_limit = 5 # Default Free
-    if user.get('subscription_tier') == 'starter':
-        daily_limit = 50
-    elif user.get('subscription_tier') == 'pro' or user.get('subscription_tier') == 'enterprise':
-        daily_limit = 999999 # Unlimited
-        
+    # Check daily limits by tier
+    daily_limits = {"free": 5, "starter": 50, "pro": 999999, "enterprise": 999999}
+    daily_limit = daily_limits.get(user.get('subscription_tier', 'free'), 5)
+
     if user.get('daily_queries_count', 0) >= daily_limit:
-          raise HTTPException(status_code=402, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade.")
-             
-    # Check expiry
-    if user.get('subscription_expiry'):
-        expiry = user['subscription_expiry'].replace(tzinfo=timezone.utc) if user['subscription_expiry'].tzinfo is None else user['subscription_expiry']
-        if now > expiry:
-             raise HTTPException(status_code=402, detail="Portfolio subscription expired")
+        raise HTTPException(status_code=429, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade.")
 
-    # Increment usage
+    # Check subscription expiry
+    if user.get('subscription_expiry'):
+        try:
+            exp_str = user['subscription_expiry']
+            expiry = datetime.fromisoformat(exp_str.replace('Z', '+00:00')) if isinstance(exp_str, str) else exp_str
+            if now > expiry:
+                raise HTTPException(status_code=402, detail="Portfolio subscription expired")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    # Increment usage counter
     new_daily_count = user.get('daily_queries_count', 0) + 1
     supabase.table("users").update({
         "daily_queries_count": new_daily_count,
@@ -504,46 +598,46 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage):
 
     # Query RAG
     try:
-        response = query_chatbot(portfolio['id'], chat.message)
-        
-        # Log chat session
+        answer = query_chatbot(portfolio['id'], chat.message)
+
         session_data = {
             "id": str(uuid.uuid4()),
             "portfolio_id": portfolio['id'],
             "visitor_name": chat.visitor_name,
             "messages": [
                 {"role": "user", "content": chat.message},
-                {"role": "assistant", "content": response}
+                {"role": "assistant", "content": answer}
             ],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": now.isoformat()
         }
-
-
         supabase.table("chat_sessions").insert(session_data).execute()
-        
-        return ChatResponse(response=response)
+
+        return ChatResponse(response=answer)
+
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        # Sanitize error for user
-        error_msg = str(e).lower()
-        if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
-             raise HTTPException(status_code=429, detail="The AI engine is out of power. Please try again in a few minutes.")
-        if "permission" in error_msg:
-             raise HTTPException(status_code=403, detail="AI engine access denied. Please contact support.")
-             
+        err = str(e).lower()
+        if "429" in err or "quota" in err or "exhausted" in err:
+            raise HTTPException(status_code=429, detail="The AI engine is busy. Please try again in a few minutes.")
+        if "permission" in err:
+            raise HTTPException(status_code=403, detail="AI engine access denied. Please contact support.")
         raise HTTPException(status_code=500, detail="The AI server is experiencing heavy load. Please try again later.")
 
-# ===== PAYMENT ENDPOINTS (RAZORPAY) =====
-import razorpay
+# =============================================
+# PAYMENT ENDPOINTS (RAZORPAY)
+# =============================================
 
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_placeholder')
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'secret_placeholder')
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
 
-# Initialize Razorpay client
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+try:
+    razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+except Exception as e:
+    logger.warning(f"Razorpay client init failed: {e}")
+    razorpay_client = None
 
 class OrderRequest(BaseModel):
-    plan_id: str  # 'starter' or 'pro'
+    plan_id: str
 
 class PaymentVerification(BaseModel):
     razorpay_order_id: str
@@ -551,18 +645,20 @@ class PaymentVerification(BaseModel):
     razorpay_signature: str
     plan_id: str
 
+PLAN_PRICES = {
+    "starter": 9900,   # ₹99 in paise
+    "pro": 49900       # ₹499 in paise
+}
+
 @app.post("/api/payment/create-order")
 async def create_order(request: OrderRequest, current_user: User = Depends(get_current_user)):
-    amount = 0
-    if request.plan_id == 'starter':
-        amount = 9900  # ₹99.00 in paise
-    elif request.plan_id == 'pro':
-        amount = 49900 # ₹499.00 in paise
-    else:
+    if not razorpay_client:
+        raise HTTPException(status_code=503, detail="Payment service unavailable")
+    amount = PLAN_PRICES.get(request.plan_id)
+    if not amount:
         raise HTTPException(status_code=400, detail="Invalid plan")
-        
     try:
-        data = { "amount": amount, "currency": "INR", "receipt": f"receipt_{current_user.id[:8]}" }
+        data = {"amount": amount, "currency": "INR", "receipt": f"receipt_{current_user.id[:8]}"}
         order = razorpay_client.order.create(data=data)
         return order
     except Exception as e:
@@ -571,67 +667,59 @@ async def create_order(request: OrderRequest, current_user: User = Depends(get_c
 
 @app.post("/api/payment/verify")
 async def verify_payment(data: PaymentVerification, current_user: User = Depends(get_current_user)):
+    if not razorpay_client:
+        raise HTTPException(status_code=503, detail="Payment service unavailable")
     try:
-        # Verify signature
         params_dict = {
             'razorpay_order_id': data.razorpay_order_id,
             'razorpay_payment_id': data.razorpay_payment_id,
             'razorpay_signature': data.razorpay_signature
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
-        
-        # Update User Subscription
         expiry = datetime.now(timezone.utc) + timedelta(days=30)
         supabase.table("users").update({
             "subscription_tier": data.plan_id,
             "subscription_expiry": expiry.isoformat(),
-            "daily_queries_count": 0 # Reset count on upgrade
+            "daily_queries_count": 0
         }).eq("id", current_user.id).execute()
         return {"status": "success", "tier": data.plan_id}
-        
     except razorpay.errors.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Payment verification failed")
     except Exception as e:
-         logger.error(f"Payment Confirm Error: {e}")
-         raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Payment Confirm Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-
-# ===== ADMIN ENDPOINTS =====
+# =============================================
+# ADMIN ENDPOINTS
+# =============================================
 
 @app.get("/api/admin/stats")
 async def get_admin_stats(current_user: User = Depends(check_admin)):
     total_users_resp = supabase.table("users").select("*", count="exact").execute()
-    total_users = total_users_resp.count
-    
     total_portfolios_resp = supabase.table("portfolios").select("*", count="exact").execute()
-    total_portfolios = total_portfolios_resp.count
-    # Revenue is mocked for now as we don't have payments yet
-    revenue = 0 
-    pending_approvals = 0
-    
     return {
-        "total_users": total_users,
-        "total_portfolios": total_portfolios,
-        "revenue": revenue,
-        "pending_approvals": pending_approvals
+        "total_users": total_users_resp.count or 0,
+        "total_portfolios": total_portfolios_resp.count or 0,
+        "revenue": 0,
+        "pending_approvals": 0
     }
 
 @app.get("/api/admin/users", response_model=List[User])
 async def get_all_users(limit: int = 100, current_user: User = Depends(check_admin)):
     response = supabase.table("users").select("*").limit(limit).execute()
-    users = response.data
-    return users
+    return response.data or []
 
 @app.put("/api/admin/users/{user_id}")
 async def update_user_admin(user_id: str, updates: UserUpdate, current_user: User = Depends(check_admin)):
     update_data = updates.model_dump(exclude_unset=True)
     if not update_data:
         return {"message": "No updates provided"}
-        
     await asyncio.to_thread(lambda: supabase.table("users").update(update_data).eq("id", user_id).execute())
     return {"message": "User updated successfully"}
 
-# ===== CONTACT/MESSAGES =====
+# =============================================
+# CONTACT / MESSAGES
+# =============================================
 
 class ContactMessage(BaseModel):
     name: str
@@ -649,16 +737,16 @@ async def submit_contact(msg: ContactMessage):
 @app.get("/api/admin/messages")
 async def get_messages(current_user: User = Depends(check_admin)):
     response = supabase.table("messages").select("*").order("created_at", desc=True).limit(100).execute()
-    messages = response.data
-    return messages
+    return response.data or []
 
-# ===== HEALTH CHECK =====
+# =============================================
+# HEALTH CHECK
+# =============================================
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": "2.0.0"}
 
 @app.on_event("shutdown")
 async def shutdown_client():
-    # Supabase client doesn't need explicit close
     pass
