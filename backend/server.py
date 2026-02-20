@@ -182,8 +182,17 @@ def upload_file_to_storage(file_bytes: bytes, path: str, content_type: str = "ap
         result = supabase.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
         return result
     except Exception as e:
-        logger.error(f"Storage upload error for {path}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload file")
+        err_str = str(e)
+        logger.error(f"Storage upload error for {path}: {err_str}")
+        # Surface helpful messages for common causes
+        if "Bucket not found" in err_str or "does not exist" in err_str.lower():
+            raise HTTPException(
+                status_code=500,
+                detail="Storage bucket 'portfolio-files' not found. Please create it in your Supabase dashboard under Storage → New Bucket (set Public: ON)."
+            )
+        if "Unauthorized" in err_str or "403" in err_str:
+            raise HTTPException(status_code=500, detail="Storage permission denied. Check your Supabase Storage bucket policies.")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {err_str[:200]}")
 
 # =============================================
 # AUTH UTILITIES
