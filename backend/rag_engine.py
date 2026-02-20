@@ -30,8 +30,8 @@ else:
     os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
     logger.info("Gemini API key loaded successfully.")
 
-MODEL_NAME = "gemini-2.5-flash"
-EMBEDDING_MODEL = "models/text-embedding-004"
+MODEL_NAME = "gemini-2.5-flash"           # LLM for chat responses
+EMBEDDING_MODEL = "models/embedding-001"  # works across all API versions
 
 # In-memory cache mapping portfolio_id -> rag_chain
 rag_chains = {}
