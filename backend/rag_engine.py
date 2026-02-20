@@ -8,22 +8,12 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-try:
-    from langchain.chains import create_retrieval_chain
-    from langchain.chains.combine_documents import create_stuff_documents_chain
-except ImportError:
-    try:
-        from langchain.chains.retrieval import create_retrieval_chain
-        from langchain.chains.combine_documents import create_stuff_documents_chain
-    except ImportError:
-        logging.getLogger(__name__).error("Could not import langchain chains. RAG will not work.")
-        create_retrieval_chain = None
-        create_stuff_documents_chain = None
-
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from langchain_community.vectorstores import FAISS
 
 load_dotenv()
@@ -102,24 +92,31 @@ def _load_faiss_from_storage(portfolio_id: str, embeddings) -> Optional[FAISS]:
 
 
 def _build_rag_chain(vectorstore: FAISS):
-    """Build a LangChain RAG chain from a loaded vectorstore."""
+    """Build a RAG chain using LCEL (LangChain Expression Language) — works on all modern versions."""
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0.2, max_output_tokens=512)
-    system_prompt = (
-        "You are an AI assistant representing the professional portfolio of the user. "
-        "1. **Identity**: Refer to the portfolio owner by their FIRST NAME instead of 'the individual' or 'the candidate'. "
-        "2. **Unknowns**: If specific information is not in the context, say: 'I don't have that information.' DO NOT guess. "
-        "3. **Tone**: Professional, confident, and direct. "
-        "4. **Scope**: Answer strictly based on the provided context below.\n\n{context}"
-    )
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
+        ("system",
+         "You are an AI assistant representing the professional portfolio of the user.\n"
+         "1. Refer to the portfolio owner by their first name, not 'the individual' or 'the candidate'.\n"
+         "2. If specific information is NOT in the context, say: 'I don't have that information.' Do not guess.\n"
+         "3. Be professional, confident, and direct.\n"
+         "4. Answer strictly based on the context provided below.\n\nContext:\n{context}"),
         ("human", "{input}")
     ])
-    if not create_retrieval_chain or not create_stuff_documents_chain:
-        raise ImportError("LangChain chain helpers not available.")
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    return create_retrieval_chain(retriever, question_answer_chain)
+
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    # LCEL chain: retrieve → format → prompt → LLM → parse
+    chain = (
+        {"context": retriever | format_docs, "input": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    return chain
 
 
 def setup_rag_chain(
@@ -196,8 +193,9 @@ def query_chatbot(portfolio_id: str, message: str) -> str:
                 raise ValueError(f"Portfolio {portfolio_id} chatbot not found. Please re-upload files.")
             rag_chains[portfolio_id] = _build_rag_chain(vectorstore)
 
-        response = rag_chains[portfolio_id].invoke({"input": message})
-        return response.get("answer", "I couldn't process that question.")
+        # LCEL chain returns a string directly (StrOutputParser)
+        result = rag_chains[portfolio_id].invoke(message)
+        return result if isinstance(result, str) else str(result)
 
     except Exception as e:
         logger.error(f"Query error: {e}")
