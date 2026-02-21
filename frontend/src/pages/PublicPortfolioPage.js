@@ -5,8 +5,82 @@ import { Input } from '@/components/ui/input';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Bot, Send, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
+
+// Renders markdown with custom styling matching the dark theme
+const MarkdownMessage = ({ content }) => (
+  <ReactMarkdown
+    components={{
+      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+      strong: ({ children }) => (
+        <strong className="font-semibold text-emerald-300">{children}</strong>
+      ),
+      em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
+      ul: ({ children }) => (
+        <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>
+      ),
+      ol: ({ children }) => (
+        <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>
+      ),
+      li: ({ children }) => <li className="text-sm">{children}</li>,
+      code: ({ inline, children }) =>
+        inline ? (
+          <code className="bg-emerald-500/10 text-emerald-300 px-1 rounded text-xs font-mono">
+            {children}
+          </code>
+        ) : (
+          <pre className="bg-black/40 border border-emerald-500/20 rounded-lg p-3 my-2 overflow-x-auto">
+            <code className="text-emerald-300 text-xs font-mono">{children}</code>
+          </pre>
+        ),
+      h1: ({ children }) => <h1 className="text-lg font-bold text-white mb-2">{children}</h1>,
+      h2: ({ children }) => <h2 className="text-base font-bold text-white mb-1">{children}</h2>,
+      h3: ({ children }) => <h3 className="text-sm font-semibold text-emerald-300 mb-1">{children}</h3>,
+    }}
+  >
+    {content}
+  </ReactMarkdown>
+);
+
+// Streaming text component — reveals text character by character
+const StreamingMessage = ({ content, onDone }) => {
+  const [displayed, setDisplayed] = useState('');
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    if (!content) return;
+    indexRef.current = 0;
+    setDisplayed('');
+
+    // Stream character by character at ~30 chars/tick for smooth UX
+    const CHUNK = 3; // chars per tick
+    const DELAY = 18; // ms per tick
+
+    const interval = setInterval(() => {
+      if (indexRef.current >= content.length) {
+        clearInterval(interval);
+        onDone?.();
+        return;
+      }
+      const end = Math.min(indexRef.current + CHUNK, content.length);
+      setDisplayed(content.slice(0, end));
+      indexRef.current = end;
+    }, DELAY);
+
+    return () => clearInterval(interval);
+  }, [content]);
+
+  return (
+    <>
+      <MarkdownMessage content={displayed} />
+      {displayed.length < content.length && (
+        <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 animate-pulse rounded-sm align-middle" />
+      )}
+    </>
+  );
+};
 
 const PublicPortfolioPage = () => {
   const { customUrl } = useParams();
@@ -15,6 +89,7 @@ const PublicPortfolioPage = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [streamingIdx, setStreamingIdx] = useState(null); // which message is streaming
   const messagesEndRef = useRef(null);
 
   const recommendedQuestions = [
@@ -30,17 +105,15 @@ const PublicPortfolioPage = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingIdx]);
 
   const fetchPortfolio = async () => {
     try {
       const response = await axios.get(`${API_URL}/public/${customUrl}`);
       setPortfolio(response.data);
-
-      // Add welcome message
       setMessages([{
         role: 'assistant',
-        content: `Hi! I'm the AI assistant for ${response.data.owner_name}'s portfolio. Ask me anything about their experience, skills, projects, or qualifications!`
+        content: `Hi! I'm the AI assistant for **${response.data.owner_name}**'s portfolio. Ask me anything about their experience, skills, projects, or qualifications!`
       }]);
     } catch (error) {
       toast.error('Portfolio not found');
@@ -49,27 +122,30 @@ const PublicPortfolioPage = () => {
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || sending) return;
+  const addAssistantMessage = (text) => {
+    setMessages(prev => {
+      const next = [...prev, { role: 'assistant', content: text }];
+      setStreamingIdx(next.length - 1);
+      return next;
+    });
+  };
 
-    const userMessage = inputMessage.trim();
+  const sendMessage = async (text) => {
+    const msg = text || inputMessage.trim();
+    if (!msg || sending) return;
     setInputMessage('');
     setSending(true);
-
-    // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setMessages(prev => [...prev, { role: 'user', content: msg }]);
 
     try {
       const response = await axios.post(`${API_URL}/chat/${customUrl}`, {
         portfolio_url: customUrl,
-        message: userMessage,
+        message: msg,
       });
-
-      // Add AI response
-      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+      addAssistantMessage(response.data.response);
     } catch (error) {
       toast.error('Failed to get response');
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+      addAssistantMessage('Sorry, I encountered an error. Please try again.');
     } finally {
       setSending(false);
     }
@@ -80,25 +156,6 @@ const PublicPortfolioPage = () => {
       e.preventDefault();
       sendMessage();
     }
-  };
-
-  const handleChipClick = (msg) => {
-    // Direct send for chips
-    if (sending) return;
-    setSending(true);
-    setMessages(prev => [...prev, { role: 'user', content: msg }]);
-
-    axios.post(`${API_URL}/chat/${customUrl}`, {
-      portfolio_url: customUrl,
-      message: msg,
-    }).then(response => {
-      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
-    }).catch(() => {
-      toast.error('Failed to get response');
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, error occurred.' }]);
-    }).finally(() => {
-      setSending(false);
-    });
   };
 
   if (loading) {
@@ -145,8 +202,10 @@ const PublicPortfolioPage = () => {
 
       {/* Chat Interface */}
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl overflow-hidden" style={{ height: 'calc(100vh - 400px)', minHeight: '500px' }}>
-          {/* Messages */}
+        <div
+          className="bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl overflow-hidden"
+          style={{ height: 'calc(100vh - 400px)', minHeight: '500px' }}
+        >
           <div className="h-full overflow-y-auto p-6 space-y-4" data-testid="chat-messages">
             {messages.map((msg, idx) => (
               <div
@@ -155,32 +214,46 @@ const PublicPortfolioPage = () => {
                 data-testid={`message-${idx}`}
               >
                 {msg.role === 'assistant' && (
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center flex-shrink-0 mt-1">
                     <Bot className="w-5 h-5 text-black" />
                   </div>
                 )}
                 <div
-                  className={`max-w-[70%] p-4 rounded-2xl ${msg.role === 'user'
-                    ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black'
-                    : 'bg-black/50 border border-emerald-500/20 text-white'
+                  className={`max-w-[75%] p-4 rounded-2xl text-sm md:text-base leading-relaxed ${msg.role === 'user'
+                      ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black font-medium'
+                      : 'bg-black/50 border border-emerald-500/20 text-gray-100'
                     }`}
+                  style={{ fontFamily: 'Inter, sans-serif' }}
                 >
-                  <p className="text-sm md:text-base" style={{ fontFamily: 'Inter, sans-serif' }}>{msg.content}</p>
+                  {msg.role === 'user' ? (
+                    msg.content
+                  ) : idx === streamingIdx ? (
+                    <StreamingMessage
+                      content={msg.content}
+                      onDone={() => setStreamingIdx(null)}
+                    />
+                  ) : (
+                    <MarkdownMessage content={msg.content} />
+                  )}
                 </div>
                 {msg.role === 'user' && (
-                  <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0 mt-1">
                     <span className="text-white text-sm font-bold">You</span>
                   </div>
                 )}
               </div>
             ))}
+
+            {/* Typing indicator */}
             {sending && (
               <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center mt-1">
                   <Bot className="w-5 h-5 text-black" />
                 </div>
-                <div className="bg-black/50 border border-emerald-500/20 p-4 rounded-2xl">
-                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+                <div className="bg-black/50 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
@@ -188,13 +261,14 @@ const PublicPortfolioPage = () => {
           </div>
         </div>
 
-        {/* Recommended Questions Chips */}
+        {/* Recommended Questions */}
         <div className="flex gap-2 mb-2 mt-4 overflow-x-auto pb-2 scrollbar-none">
           {recommendedQuestions.map((q, i) => (
             <button
               key={i}
-              onClick={() => handleChipClick(q)}
-              className="whitespace-nowrap px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-colors"
+              onClick={() => sendMessage(q)}
+              disabled={sending}
+              className="whitespace-nowrap px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {q}
             </button>
@@ -213,7 +287,7 @@ const PublicPortfolioPage = () => {
             data-testid="chat-input"
           />
           <Button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={!inputMessage.trim() || sending}
             className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black px-8"
             data-testid="send-message-btn"
