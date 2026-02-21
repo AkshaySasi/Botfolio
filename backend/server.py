@@ -550,17 +550,19 @@ async def get_public_portfolio(custom_url: str):
 @app.post("/api/chat/{custom_url}", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Request):
-    response = supabase.table("portfolios").select("*").eq("custom_url", custom_url).single().execute()
-    portfolio = response.data
-    if not portfolio or not portfolio.get('is_active'):
+    resp = supabase.table("portfolios").select("*").eq("custom_url", custom_url).execute()
+    if not resp.data:
         raise HTTPException(status_code=404, detail="Portfolio not found")
+    portfolio = resp.data[0]
+    if not portfolio.get('is_active'):
+        raise HTTPException(status_code=404, detail="Portfolio not found or inactive")
     if not portfolio.get('is_processed'):
         raise HTTPException(status_code=503, detail="Portfolio chatbot is still being trained. Please try again shortly.")
 
-    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).single().execute()
-    user = user_resp.data
-    if not user:
+    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).execute()
+    if not user_resp.data:
         raise HTTPException(status_code=404, detail="Portfolio owner not found")
+    user = user_resp.data[0]
 
     now = datetime.now(timezone.utc)
 

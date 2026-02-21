@@ -16,7 +16,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import FAISS
-from google import genai as google_genai
+import httpx
 
 load_dotenv()
 
@@ -32,47 +32,62 @@ else:
     os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
     logger.info("Gemini API key loaded successfully.")
 
-MODEL_NAME = "gemini-2.5-flash"       # LLM for chat responses
-EMBEDDING_MODEL = "text-embedding-004" # Embedding model via google-genai SDK
+MODEL_NAME = "gemini-2.5-flash"        # LLM for chat
+EMBEDDING_MODEL = "text-embedding-004"  # REST API v1 embedding model
+_EMBED_URL = "https://generativelanguage.googleapis.com/v1/models/{model}:embedContent"
+_BATCH_URL = "https://generativelanguage.googleapis.com/v1/models/{model}:batchEmbedContents"
 
 
 class GeminiEmbeddings(Embeddings):
     """
-    Custom embeddings using google-genai SDK directly.
-    Bypasses the langchain-google-genai wrapper which incorrectly
-    calls batchEmbedContents on v1beta (unsupported for these models).
+    Embeddings via Gemini REST API v1 (not v1beta).
+    The google-genai SDK always targets v1beta where text-embedding-004 is
+    unavailable, so we call the REST API directly using httpx.
     """
     def __init__(self, model_name: str = EMBEDDING_MODEL):
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self._client = google_genai.Client(api_key=api_key)
+        self._api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self._model = model_name
+        self._batch_url = _BATCH_URL.format(model=model_name)
+        self._single_url = _EMBED_URL.format(model=model_name)
+
+    def _embed_one(self, text: str) -> list:
+        """Embed a single text via REST v1 embedContent."""
+        payload = {"content": {"parts": [{"text": text}]}}
+        resp = httpx.post(
+            self._single_url,
+            params={"key": self._api_key},
+            json=payload,
+            timeout=30
+        )
+        resp.raise_for_status()
+        return resp.json()["embedding"]["values"]
 
     def embed_documents(self, texts: list) -> list:
-        """Embed a list of documents."""
+        """Batch embed via REST v1 batchEmbedContents."""
         if not texts:
             return []
+        # Try batch first (more efficient)
         try:
-            result = self._client.models.embed_content(
-                model=self._model,
-                contents=texts
+            requests_payload = [
+                {"model": f"models/{self._model}",
+                 "content": {"parts": [{"text": t}]}}
+                for t in texts
+            ]
+            resp = httpx.post(
+                self._batch_url,
+                params={"key": self._api_key},
+                json={"requests": requests_payload},
+                timeout=60
             )
-            return [e.values for e in result.embeddings]
+            resp.raise_for_status()
+            return [e["values"] for e in resp.json()["embeddings"]]
         except Exception as e:
-            logger.error(f"Batch embedding error: {e}. Falling back to single embed.")
-            # Fallback: embed one at a time
-            embeddings = []
-            for text in texts:
-                r = self._client.models.embed_content(model=self._model, contents=text)
-                embeddings.append(r.embeddings[0].values)
-            return embeddings
+            logger.warning(f"Batch embed failed ({e}), falling back to single embeds")
+            return [self._embed_one(t) for t in texts]
 
     def embed_query(self, text: str) -> list:
         """Embed a single query string."""
-        result = self._client.models.embed_content(
-            model=self._model,
-            contents=text
-        )
-        return result.embeddings[0].values
+        return self._embed_one(text)
 
 # In-memory cache mapping portfolio_id -> rag_chain
 rag_chains = {}
