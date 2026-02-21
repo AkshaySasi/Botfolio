@@ -16,6 +16,9 @@ import SettingsPage from './pages/SettingsPage';
 import PortfolioManagePage from './pages/PortfolioManagePage';
 import PricingPage from './pages/PricingPage';
 import CheckoutPage from './pages/CheckoutPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
+import ContactPage from './pages/ContactPage';
 
 // Admin Pages
 import AdminLayout from './layouts/AdminLayout';
@@ -78,6 +81,9 @@ function App() {
               <CheckoutPage />
             </ProtectedRoute>
           } />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/contact" element={<ContactPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>

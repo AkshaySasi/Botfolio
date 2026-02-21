@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Bot, Send, Loader2 } from 'lucide-react';
+import { Bot, Send, Loader2, Zap, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
@@ -90,6 +90,7 @@ const PublicPortfolioPage = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [streamingIdx, setStreamingIdx] = useState(null); // which message is streaming
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const messagesEndRef = useRef(null);
 
   const recommendedQuestions = [
@@ -144,8 +145,12 @@ const PublicPortfolioPage = () => {
       });
       addAssistantMessage(response.data.response);
     } catch (error) {
-      toast.error('Failed to get response');
-      addAssistantMessage('Sorry, I encountered an error. Please try again.');
+      if (error.response?.status === 429) {
+        setShowLimitModal(true);
+      } else {
+        toast.error('Failed to get response');
+        addAssistantMessage('Sorry, I encountered an error. Please try again.');
+      }
     } finally {
       setSending(false);
     }
@@ -220,8 +225,8 @@ const PublicPortfolioPage = () => {
                 )}
                 <div
                   className={`max-w-[75%] p-4 rounded-2xl text-sm md:text-base leading-relaxed ${msg.role === 'user'
-                      ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black font-medium'
-                      : 'bg-black/50 border border-emerald-500/20 text-gray-100'
+                    ? 'bg-gradient-to-r from-emerald-500 to-lime-500 text-black font-medium'
+                    : 'bg-black/50 border border-emerald-500/20 text-gray-100'
                     }`}
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
@@ -305,11 +310,52 @@ const PublicPortfolioPage = () => {
             <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-6 h-6" />
             <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
-          <p className="text-gray-500 text-xs">Create your own AI portfolio chatbot</p>
+          <p className="text-gray-500 text-xs">
+            Create your own AI portfolio chatbot &nbsp;·&nbsp;
+            <Link to="/privacy" className="hover:text-emerald-400">Privacy</Link>
+            &nbsp;·&nbsp;
+            <Link to="/terms" className="hover:text-emerald-400">Terms</Link>
+          </p>
         </div>
       </footer>
+
+      {/* ─── Free Tier Request Limit Popup ─── */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-emerald-500/30 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl relative">
+            <button onClick={() => setShowLimitModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-7 h-7 text-emerald-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Request Limit Reached</h3>
+              <p className="text-gray-400 text-sm">
+                This portfolio has reached its <strong className="text-white">5 free daily requests</strong>.
+                Upgrade the account to unlock unlimited AI conversations.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Link to="/pricing">
+                <Button className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold">
+                  <Zap className="w-4 h-4 mr-2" /> View Plans
+                </Button>
+              </Link>
+              <Button
+                onClick={() => setShowLimitModal(false)}
+                variant="outline"
+                className="w-full border-gray-700 text-gray-400 hover:bg-gray-800"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default PublicPortfolioPage;
+

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Bot, Sparkles, MessageSquare, Globe, BarChart, Zap, Send } from 'lucide-react';
+import { Sparkles, MessageSquare, Globe, BarChart, Zap, Send, Bot } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
@@ -68,6 +68,35 @@ const ContactForm = () => {
 import AdBanner from '@/components/AdBanner';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
+
+// Slot machine rolling number animation
+const SlotNumber = ({ target, duration = 1800 }) => {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(null);
+  const observed = useRef(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !observed.current) {
+        observed.current = true;
+        const start = Date.now();
+        const tick = () => {
+          const elapsed = Date.now() - start;
+          const progress = Math.min(elapsed / duration, 1);
+          // Ease-out cubic
+          const eased = 1 - Math.pow(1 - progress, 3);
+          setDisplay(Math.round(eased * target));
+          if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    }, { threshold: 0.5 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [target, duration]);
+
+  return <span ref={ref}>{display}</span>;
+};
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -136,11 +165,7 @@ const LandingPage = () => {
 
         <div className="relative max-w-7xl mx-auto px-6 py-24 md:py-32">
           <div className="text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-6">
-              <Bot className="w-5 h-5 text-emerald-400" />
-              <span className="text-sm text-emerald-400">Build your AI Portfolio</span>
-            </div>
-
+            {/* Hero heading — no pill badge */}
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               <span className="bg-gradient-to-r from-emerald-400 via-lime-400 to-yellow-400 bg-clip-text text-transparent">
                 Build Your AI Portfolio
@@ -174,8 +199,10 @@ const LandingPage = () => {
                 <div className="text-sm text-gray-500 mt-1">Accuracy</div>
               </div>
               <div className="text-center">
-                <div className="text-4xl font-bold text-emerald-400">4.9/5</div>
-                <div className="text-sm text-gray-500 mt-1">User Rating</div>
+                <div className="text-4xl font-bold text-emerald-400">
+                  <SlotNumber target={94} />
+                </div>
+                <div className="text-sm text-gray-500 mt-1">botfolios created</div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold text-emerald-400">&lt;1s</div>
@@ -416,9 +443,9 @@ const LandingPage = () => {
               © 2025 Botfolio. Transforming careers with AI.
             </p>
             <div className="flex gap-6">
-              <a href="#" className="text-gray-500 hover:text-emerald-400 transition-colors">Privacy</a>
-              <a href="#" className="text-gray-500 hover:text-emerald-400 transition-colors">Terms</a>
-              <a href="#" className="text-gray-500 hover:text-emerald-400 transition-colors">Contact</a>
+              <Link to="/privacy" className="text-gray-500 hover:text-emerald-400 transition-colors">Privacy</Link>
+              <Link to="/terms" className="text-gray-500 hover:text-emerald-400 transition-colors">Terms</Link>
+              <Link to="/contact" className="text-gray-500 hover:text-emerald-400 transition-colors">Contact</Link>
             </div>
           </div>
         </div>

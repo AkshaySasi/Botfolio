@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Bot, BarChart, Settings, LogOut, ExternalLink, Trash2, Eye } from 'lucide-react';
+import { Plus, Bot, BarChart, Settings, LogOut, ExternalLink, Trash2, Eye, AlertTriangle, X, Zap } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
@@ -15,6 +15,8 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const [portfolios, setPortfolios] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -36,11 +38,10 @@ const DashboardPage = () => {
   };
 
   const handleDelete = async (portfolioId) => {
-    if (!window.confirm('Are you sure you want to delete this portfolio?')) return;
-
     try {
       await axios.delete(`${API_URL}/portfolios/${portfolioId}`);
       toast.success('Portfolio deleted');
+      setDeleteTarget(null);
       fetchPortfolios();
     } catch (error) {
       toast.error('Failed to delete portfolio');
@@ -95,7 +96,7 @@ const DashboardPage = () => {
             {/* Header */}
             <div className="mb-12">
               <h1 className="text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                Your AI Chatbots
+                Manage your botfolios
               </h1>
               <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Manage your personal chatbots and track their performance
@@ -223,7 +224,7 @@ const DashboardPage = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDelete(portfolio.id)}
+                        onClick={() => setDeleteTarget({ id: portfolio.id, name: portfolio.name })}
                         className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                         data-testid={`delete-portfolio-${portfolio.id}`}
                       >
@@ -240,6 +241,75 @@ const DashboardPage = () => {
           </>
         )}
       </div>
+
+      {/* ─── Delete Confirmation Modal ─── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-red-500/30 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Delete Portfolio?</h3>
+                <p className="text-gray-500 text-sm">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-300 mb-6 text-sm">
+              You're about to permanently delete <strong className="text-white">{deleteTarget.name}</strong>.
+              All associated files and chatbot data will be removed.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setDeleteTarget(null)}
+                variant="outline"
+                className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleDelete(deleteTarget.id)}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Request Limit Modal (Free Tier) ─── */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] border border-emerald-500/30 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <button onClick={() => setShowLimitModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                <Zap className="w-7 h-7 text-emerald-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Daily Limit Reached</h3>
+              <p className="text-gray-400 text-sm">You've used all 5 free AI requests for today. Upgrade to get unlimited daily queries.</p>
+            </div>
+            <div className="space-y-3">
+              <Button
+                onClick={() => { setShowLimitModal(false); navigate('/pricing'); }}
+                className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
+              >
+                <Zap className="w-4 h-4 mr-2" /> Upgrade Now
+              </Button>
+              <Button
+                onClick={() => setShowLimitModal(false)}
+                variant="outline"
+                className="w-full border-gray-700 text-gray-400 hover:bg-gray-800"
+              >
+                Maybe Later
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
