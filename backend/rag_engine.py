@@ -33,22 +33,71 @@ else:
     logger.info("Gemini API key loaded successfully.")
 
 MODEL_NAME = "gemini-2.5-flash"
-EMBEDDING_MODEL = "models/text-embedding-004"
+
+# Ordered list of embedding models to try (most preferred first)
+_EMBED_MODELS_TO_TRY = [
+    "models/text-embedding-004",
+    "models/embedding-001",
+    "models/gemini-embedding-exp-03-07",
+]
+_EMBED_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 
 class GeminiEmbeddings(Embeddings):
     """
-    Embeddings using google-generativeai SDK (battle-tested, proven to work).
-    Uses genai_sdk.embed_content() which correctly calls v1beta/embedContent.
+    Auto-discovers the first working Gemini embedding model for this API key.
+    Uses the official v1beta REST API with ?key= query param.
     """
-    def __init__(self, model_name: str = EMBEDDING_MODEL):
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        genai_sdk.configure(api_key=api_key)
-        self._model = model_name
+    _active_model: str = None  # class-level cache
+
+    def __init__(self):
+        import httpx as _httpx
+        self._http = _httpx
+        self._api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not GeminiEmbeddings._active_model:
+            GeminiEmbeddings._active_model = self._find_working_model()
+
+    def _embed_rest(self, text: str, model: str) -> list:
+        url = f"{_EMBED_BASE}/{model}:embedContent"
+        payload = {"content": {"parts": [{"text": text}]}}
+        resp = self._http.post(
+            url, params={"key": self._api_key}, json=payload, timeout=30
+        )
+        if not resp.is_success:
+            body = resp.text[:300]
+            raise RuntimeError(f"HTTP {resp.status_code} from {url}: {body}")
+        return resp.json()["embedding"]["values"]
+
+    def _find_working_model(self) -> str:
+        """Try each model with a test embedding. Return the first that works."""
+        for model in _EMBED_MODELS_TO_TRY:
+            try:
+                self._embed_rest("test", model)
+                logger.info(f"✅ Embedding model working: {model}")
+                return model
+            except Exception as e:
+                logger.warning(f"❌ Embedding model {model}: {e}")
+        # Log available models for debugging
+        try:
+            import httpx as _httpx
+            r = _httpx.get(
+                f"{_EMBED_BASE}/models",
+                params={"key": self._api_key},
+                timeout=10
+            )
+            models = r.json().get("models", [])
+            embed_models = [m["name"] for m in models
+                           if "embedContent" in m.get("supportedGenerationMethods", [])]
+            logger.error(f"Available embedding models for this key: {embed_models}")
+        except Exception as le:
+            logger.error(f"Could not list models: {le}")
+        raise RuntimeError(
+            "No working embedding model found. "
+            "Check GEMINI_API_KEY and see logs for available models."
+        )
 
     def _embed_one(self, text: str) -> list:
-        result = genai_sdk.embed_content(model=self._model, content=text)
-        return result["embedding"]
+        return self._embed_rest(text, GeminiEmbeddings._active_model)
 
     def embed_documents(self, texts: list) -> list:
         if not texts:
