@@ -32,61 +32,76 @@ else:
     os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
     logger.info("Gemini API key loaded successfully.")
 
-MODEL_NAME = "gemini-2.5-flash"        # LLM for chat
-EMBEDDING_MODEL = "text-embedding-004"  # REST API v1 embedding model
-_EMBED_URL = "https://generativelanguage.googleapis.com/v1/models/{model}:embedContent"
-_BATCH_URL = "https://generativelanguage.googleapis.com/v1/models/{model}:batchEmbedContents"
+MODEL_NAME = "gemini-2.5-flash"
+EMBEDDING_MODEL = "text-embedding-004"
+
+# Try multiple endpoints — different API versions have different model availability
+_ENDPOINTS = [
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent",
+    "https://generativelanguage.googleapis.com/v1/models/{model}:embedContent",
+]
+_BATCH_ENDPOINTS = [
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents",
+    "https://generativelanguage.googleapis.com/v1/models/{model}:batchEmbedContents",
+]
 
 
 class GeminiEmbeddings(Embeddings):
     """
-    Embeddings via Gemini REST API v1 (not v1beta).
-    The google-genai SDK always targets v1beta where text-embedding-004 is
-    unavailable, so we call the REST API directly using httpx.
+    Embeddings via Gemini REST API.
+    Tries v1beta then v1 endpoints, using x-goog-api-key header (never in URL)
+    to prevent key leakage in logs.
     """
     def __init__(self, model_name: str = EMBEDDING_MODEL):
         self._api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         self._model = model_name
-        self._batch_url = _BATCH_URL.format(model=model_name)
-        self._single_url = _EMBED_URL.format(model=model_name)
+        self._headers = {
+            "x-goog-api-key": self._api_key,
+            "Content-Type": "application/json",
+        }
 
     def _embed_one(self, text: str) -> list:
-        """Embed a single text via REST v1 embedContent."""
+        """Try each embedContent endpoint until one works."""
         payload = {"content": {"parts": [{"text": text}]}}
-        resp = httpx.post(
-            self._single_url,
-            params={"key": self._api_key},
-            json=payload,
-            timeout=30
-        )
-        resp.raise_for_status()
-        return resp.json()["embedding"]["values"]
+        last_err = None
+        for url_tmpl in _ENDPOINTS:
+            url = url_tmpl.format(model=self._model)
+            try:
+                resp = httpx.post(url, headers=self._headers, json=payload, timeout=30)
+                resp.raise_for_status()
+                return resp.json()["embedding"]["values"]
+            except Exception as e:
+                last_err = e
+                logger.warning(f"embedContent failed at {url}: {e}")
+        raise RuntimeError(f"All embedContent endpoints failed: {last_err}")
 
     def embed_documents(self, texts: list) -> list:
-        """Batch embed via REST v1 batchEmbedContents."""
+        """Try batch embed, fall back to single embeds."""
         if not texts:
             return []
-        # Try batch first (more efficient)
-        try:
-            requests_payload = [
-                {"model": f"models/{self._model}",
-                 "content": {"parts": [{"text": t}]}}
-                for t in texts
-            ]
-            resp = httpx.post(
-                self._batch_url,
-                params={"key": self._api_key},
-                json={"requests": requests_payload},
-                timeout=60
-            )
-            resp.raise_for_status()
-            return [e["values"] for e in resp.json()["embeddings"]]
-        except Exception as e:
-            logger.warning(f"Batch embed failed ({e}), falling back to single embeds")
-            return [self._embed_one(t) for t in texts]
+        last_err = None
+        for url_tmpl in _BATCH_ENDPOINTS:
+            url = url_tmpl.format(model=self._model)
+            try:
+                requests_payload = [
+                    {"model": f"models/{self._model}",
+                     "content": {"parts": [{"text": t}]}}
+                    for t in texts
+                ]
+                resp = httpx.post(
+                    url, headers=self._headers,
+                    json={"requests": requests_payload}, timeout=60
+                )
+                resp.raise_for_status()
+                return [e["values"] for e in resp.json()["embeddings"]]
+            except Exception as e:
+                last_err = e
+                logger.warning(f"batchEmbedContents failed at {url}: {e}")
+        # Last resort: embed one at a time
+        logger.warning(f"All batch endpoints failed ({last_err}), embedding one-by-one")
+        return [self._embed_one(t) for t in texts]
 
     def embed_query(self, text: str) -> list:
-        """Embed a single query string."""
         return self._embed_one(text)
 
 # In-memory cache mapping portfolio_id -> rag_chain
