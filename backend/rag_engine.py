@@ -36,6 +36,7 @@ MODEL_NAME = "gemini-2.5-flash"
 
 # Ordered list of embedding models to try (most preferred first)
 _EMBED_MODELS_TO_TRY = [
+    "models/gemini-embedding-001",      # confirmed available for this key
     "models/text-embedding-004",
     "models/embedding-001",
     "models/gemini-embedding-exp-03-07",
