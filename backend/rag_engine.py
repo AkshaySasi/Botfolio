@@ -16,7 +16,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import FAISS
-import httpx
+import google.generativeai as genai_sdk
 
 load_dotenv()
 
@@ -33,72 +33,26 @@ else:
     logger.info("Gemini API key loaded successfully.")
 
 MODEL_NAME = "gemini-2.5-flash"
-EMBEDDING_MODEL = "text-embedding-004"
-
-# Try multiple endpoints — different API versions have different model availability
-_ENDPOINTS = [
-    "https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent",
-    "https://generativelanguage.googleapis.com/v1/models/{model}:embedContent",
-]
-_BATCH_ENDPOINTS = [
-    "https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents",
-    "https://generativelanguage.googleapis.com/v1/models/{model}:batchEmbedContents",
-]
+EMBEDDING_MODEL = "models/text-embedding-004"
 
 
 class GeminiEmbeddings(Embeddings):
     """
-    Embeddings via Gemini REST API.
-    Tries v1beta then v1 endpoints, using x-goog-api-key header (never in URL)
-    to prevent key leakage in logs.
+    Embeddings using google-generativeai SDK (battle-tested, proven to work).
+    Uses genai_sdk.embed_content() which correctly calls v1beta/embedContent.
     """
     def __init__(self, model_name: str = EMBEDDING_MODEL):
-        self._api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        genai_sdk.configure(api_key=api_key)
         self._model = model_name
-        self._headers = {
-            "x-goog-api-key": self._api_key,
-            "Content-Type": "application/json",
-        }
 
     def _embed_one(self, text: str) -> list:
-        """Try each embedContent endpoint until one works."""
-        payload = {"content": {"parts": [{"text": text}]}}
-        last_err = None
-        for url_tmpl in _ENDPOINTS:
-            url = url_tmpl.format(model=self._model)
-            try:
-                resp = httpx.post(url, headers=self._headers, json=payload, timeout=30)
-                resp.raise_for_status()
-                return resp.json()["embedding"]["values"]
-            except Exception as e:
-                last_err = e
-                logger.warning(f"embedContent failed at {url}: {e}")
-        raise RuntimeError(f"All embedContent endpoints failed: {last_err}")
+        result = genai_sdk.embed_content(model=self._model, content=text)
+        return result["embedding"]
 
     def embed_documents(self, texts: list) -> list:
-        """Try batch embed, fall back to single embeds."""
         if not texts:
             return []
-        last_err = None
-        for url_tmpl in _BATCH_ENDPOINTS:
-            url = url_tmpl.format(model=self._model)
-            try:
-                requests_payload = [
-                    {"model": f"models/{self._model}",
-                     "content": {"parts": [{"text": t}]}}
-                    for t in texts
-                ]
-                resp = httpx.post(
-                    url, headers=self._headers,
-                    json={"requests": requests_payload}, timeout=60
-                )
-                resp.raise_for_status()
-                return [e["values"] for e in resp.json()["embeddings"]]
-            except Exception as e:
-                last_err = e
-                logger.warning(f"batchEmbedContents failed at {url}: {e}")
-        # Last resort: embed one at a time
-        logger.warning(f"All batch endpoints failed ({last_err}), embedding one-by-one")
         return [self._embed_one(t) for t in texts]
 
     def embed_query(self, text: str) -> list:

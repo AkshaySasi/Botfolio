@@ -19,6 +19,7 @@ fastapi
 frozenlist
 fsspec
 google-ai-generativelanguage
+google-generativeai
 google-api-core
 google-auth
 googleapis-common-protos
