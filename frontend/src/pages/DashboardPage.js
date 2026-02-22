@@ -59,7 +59,7 @@ const DashboardPage = () => {
     <div className="min-h-screen bg-[#0a0a0a]" data-testid="dashboard-page">
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Guest View */}
         {!user && (
           <div className="text-center py-20">
@@ -95,7 +95,7 @@ const DashboardPage = () => {
           <>
             {/* Header */}
             <div className="mb-12">
-              <h1 className="text-4xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 Manage your botfolios
               </h1>
               <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -133,7 +133,7 @@ const DashboardPage = () => {
             {canCreateMore() ? (
               <Button
                 onClick={() => navigate('/builder')}
-                className="mb-8 bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
+                className="mb-8 w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
                 data-testid="create-portfolio-btn"
               >
                 <Plus className="mr-2 h-5 w-5" />
@@ -167,7 +167,7 @@ const DashboardPage = () => {
                 </Button>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {portfolios.map((portfolio, index) => (
                   <div
                     key={portfolio.id}

@@ -189,14 +189,14 @@ const PublicPortfolioPage = () => {
     <div className="min-h-screen bg-[#0a0a0a]" data-testid="public-portfolio-page">
       {/* Header */}
       <header className="border-b border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-black to-transparent">
-        <div className="max-w-7xl mx-auto px-6 py-12 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-16 h-16" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {portfolio.owner_name}'s
           </h1>
-          <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             AI Portfolio Assistant
           </h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -206,12 +206,12 @@ const PublicPortfolioPage = () => {
       </header>
 
       {/* Chat Interface */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
         <div
           className="bg-gradient-to-br from-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl overflow-hidden"
-          style={{ height: 'calc(100vh - 400px)', minHeight: '500px' }}
+          style={{ height: 'calc(100dvh - 360px)', minHeight: '340px' }}
         >
-          <div className="h-full overflow-y-auto p-6 space-y-4" data-testid="chat-messages">
+          <div className="h-full overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4" data-testid="chat-messages">
             {messages.map((msg, idx) => (
               <div
                 key={idx}

@@ -160,9 +160,9 @@ const BuilderPage = () => {
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             Create Your <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">AI Chatbot</span>
           </h1>
           <p className="text-gray-400 text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -170,7 +170,7 @@ const BuilderPage = () => {
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-8">
+        <div className="bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-5 sm:p-8">
 
           {/* ── Progress bar — always rendered, only visible during upload ── */}
           <UploadProgressBar

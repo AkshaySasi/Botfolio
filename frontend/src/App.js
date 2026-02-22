@@ -19,6 +19,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import ContactPage from './pages/ContactPage';
+import HowItWorksPage from './pages/HowItWorksPage';
 
 // Admin Pages
 import AdminLayout from './layouts/AdminLayout';
@@ -84,6 +85,7 @@ function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/how-it-works" element={<HowItWorksPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
