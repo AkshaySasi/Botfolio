@@ -49,9 +49,11 @@ const AdminLayout = () => {
       `}>
                 <div className="p-5 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-black" />
-                        </div>
+                        <img
+                            src="/assets/botfolio-logo-transparent.png"
+                            alt="Botfolio"
+                            className="w-9 h-9 object-contain"
+                        />
                         <div>
                             <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent block leading-tight"
                                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Console</span>
