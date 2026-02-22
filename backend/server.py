@@ -81,7 +81,17 @@ app.add_middleware(
 )
 
 # =============================================
+# HEALTH CHECK — keeps Render warm
+# =============================================
+
+@app.get("/api/health")
+async def health_check():
+    """Lightweight ping endpoint — used by keep-alive crons and frontend warm-up."""
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+# =============================================
 # MODELS
+
 # =============================================
 
 class User(BaseModel):

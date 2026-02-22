@@ -14,6 +14,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [backendReady, setBackendReady] = useState(false);
+
+  // ── Wake-up ping ──────────────────────────────────────────────────────
+  // Fires immediately on app load so Render stops cold-starting
+  // before the user has to wait for a real API call.
+  useEffect(() => {
+    let retries = 0;
+    const MAX = 6; // ~30 seconds of total retrying
+    const ping = async () => {
+      try {
+        await axios.get(`${API_URL}/api/health`, { timeout: 8000 });
+        setBackendReady(true);
+      } catch {
+        if (++retries < MAX) setTimeout(ping, 5000);
+      }
+    };
+    ping();
+  }, []);
 
   // Setup axios defaults
   useEffect(() => {
@@ -24,6 +42,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, [token]);
+
 
   const fetchUser = async () => {
     try {
