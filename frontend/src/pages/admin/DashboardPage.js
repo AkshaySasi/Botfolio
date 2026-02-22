@@ -4,7 +4,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
     Users, FileText, DollarSign, Shield, MessageSquare, Activity,
-    TrendingUp, Download, ArrowUpRight, Zap,
+    TrendingUp, Download, ArrowUpRight, Zap, Ticket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -162,17 +162,17 @@ const AdminDashboardPage = () => {
 
             {/* Quick links */}
             <div className="grid sm:grid-cols-3 gap-3">
-                <Link to="/console-x9k2/users" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
+                <Link to="/console-admin5353v1/users" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
                     <Users className="w-5 h-5 text-gray-600 group-hover:text-emerald-400 transition-colors mb-2" />
                     <div className="text-sm font-medium text-white">Manage Users</div>
                     <div className="text-xs text-gray-600">Search, filter, block</div>
                 </Link>
-                <Link to="/console-x9k2/coupons" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
+                <Link to="/console-admin5353v1/coupons" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
                     <Ticket className="w-5 h-5 text-gray-600 group-hover:text-emerald-400 transition-colors mb-2" />
                     <div className="text-sm font-medium text-white">Coupons & Discounts</div>
                     <div className="text-xs text-gray-600">Create, manage promo codes</div>
                 </Link>
-                <Link to="/console-x9k2/system" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
+                <Link to="/console-admin5353v1/system" className="rounded-xl border border-white/5 bg-[#0d0d0d] p-4 hover:border-emerald-500/20 transition-colors group">
                     <Activity className="w-5 h-5 text-gray-600 group-hover:text-emerald-400 transition-colors mb-2" />
                     <div className="text-sm font-medium text-white">System Controls</div>
                     <div className="text-xs text-gray-600">Maintenance, exports</div>
