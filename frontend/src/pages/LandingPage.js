@@ -175,7 +175,7 @@ const LandingPage = () => {
             </h1>
 
             <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Transform your resume into a stunning portfolio website with an intelligent AI chatbot that answers questions about your experience, skills, and projects. Let your portfolio work for you 24/7.
+              Transform your Resume into a conversational chatbot portfolio. Let your work & experience speak for itself - literally...
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -210,7 +210,7 @@ const LandingPage = () => {
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold text-emerald-400">
-                  <SlotNumber target={94} />
+                  <SlotNumber target={10} />+
                 </div>
                 <div className="text-sm text-gray-500 mt-1">botfolios created</div>
               </div>
