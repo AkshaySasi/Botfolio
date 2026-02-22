@@ -25,13 +25,13 @@ const AdminLayout = () => {
     const handleLogout = () => { logout(); navigate('/login'); };
 
     const navItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/console-x9k2/dashboard' },
-        { icon: Users, label: 'Users', path: '/console-x9k2/users' },
-        { icon: Activity, label: 'Revenue', path: '/console-x9k2/revenue' },
-        { icon: Ticket, label: 'Coupons', path: '/console-x9k2/coupons' },
-        { icon: Bell, label: 'Notifications', path: '/console-x9k2/notifications' },
-        { icon: MessageSquare, label: 'Messages', path: '/console-x9k2/messages' },
-        { icon: Server, label: 'System', path: '/console-x9k2/system' },
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/console-admin5353v1/dashboard' },
+        { icon: Users, label: 'Users', path: '/console-admin5353v1/users' },
+        { icon: Activity, label: 'Revenue', path: '/console-admin5353v1/revenue' },
+        { icon: Ticket, label: 'Coupons', path: '/console-admin5353v1/coupons' },
+        { icon: Bell, label: 'Notifications', path: '/console-admin5353v1/notifications' },
+        { icon: MessageSquare, label: 'Messages', path: '/console-admin5353v1/messages' },
+        { icon: Server, label: 'System', path: '/console-admin5353v1/system' },
     ];
 
     return (
@@ -119,8 +119,8 @@ const AdminLayout = () => {
                     <div className="hidden lg:block" />
                     <div className="flex items-center gap-3">
                         <div className={`px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 ${systemOnline
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${systemOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
                             {systemOnline ? 'Live' : 'Maintenance'}

@@ -85,7 +85,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 class MaintenanceMiddleware(BaseHTTPMiddleware):
-    BYPASS_PATHS = {"/api/health", "/api/admin/", "/api/auth/login", "/docs", "/openapi.json"}
+    BYPASS_PATHS = {"/api/health", "/api/admin/", "/api/auth/login", "/docs", "/openapi.json", "/console-admin5353v1"}
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path

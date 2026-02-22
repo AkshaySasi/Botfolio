@@ -94,8 +94,8 @@ const Navbar = () => {
                                     key={label}
                                     to={href}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${location.pathname === href
-                                            ? 'text-emerald-400 bg-emerald-500/10'
-                                            : 'text-gray-300 hover:text-emerald-400 hover:bg-emerald-500/8'
+                                        ? 'text-emerald-400 bg-emerald-500/10'
+                                        : 'text-gray-300 hover:text-emerald-400 hover:bg-emerald-500/8'
                                         }`}
                                 >
                                     {label}
@@ -113,8 +113,8 @@ const Navbar = () => {
                         <Link
                             to="/dashboard"
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${location.pathname === '/dashboard'
-                                    ? 'text-emerald-400 bg-emerald-500/10'
-                                    : 'text-gray-300 hover:text-emerald-400 hover:bg-emerald-500/8'
+                                ? 'text-emerald-400 bg-emerald-500/10'
+                                : 'text-gray-300 hover:text-emerald-400 hover:bg-emerald-500/8'
                                 }`}
                         >
                             Dashboard
@@ -122,7 +122,7 @@ const Navbar = () => {
 
                         {user?.is_admin && (
                             <Link
-                                to="/admin"
+                                to="/console-admin5353v1"
                                 className="text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-full bg-emerald-500/10 text-xs font-semibold"
                             >
                                 Admin
@@ -250,8 +250,8 @@ const Navbar = () => {
                                     key={label}
                                     to={href}
                                     className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-1 transition-all group ${location.pathname === href
-                                            ? 'bg-emerald-500/15 text-emerald-400'
-                                            : 'text-gray-300 hover:bg-emerald-500/8 hover:text-emerald-400'
+                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                        : 'text-gray-300 hover:bg-emerald-500/8 hover:text-emerald-400'
                                         }`}
                                     style={{ animationDelay: `${i * 40}ms` }}
                                 >
@@ -275,8 +275,8 @@ const Navbar = () => {
                         <Link
                             to="/dashboard"
                             className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-1 transition-all group ${location.pathname === '/dashboard'
-                                    ? 'bg-emerald-500/15 text-emerald-400'
-                                    : 'text-gray-300 hover:bg-emerald-500/8 hover:text-emerald-400'
+                                ? 'bg-emerald-500/15 text-emerald-400'
+                                : 'text-gray-300 hover:bg-emerald-500/8 hover:text-emerald-400'
                                 }`}
                         >
                             <LayoutDashboard className="w-4.5 h-4.5" />
@@ -286,7 +286,7 @@ const Navbar = () => {
 
                         {user?.is_admin && (
                             <Link
-                                to="/admin"
+                                to="/console-admin5353v1"
                                 className="flex items-center gap-3 px-3 py-3 rounded-xl mb-1 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/15 transition-all"
                             >
                                 <Star className="w-4.5 h-4.5" />

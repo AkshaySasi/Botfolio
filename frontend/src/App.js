@@ -126,7 +126,7 @@ function App() {
             } />
 
             {/* Admin Console — cryptic path */}
-            <Route path="/console-x9k2" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route path="/console-admin5353v1" element={<AdminRoute><AdminLayout /></AdminRoute>}>
               <Route index element={<Navigate to="dashboard" />} />
               <Route path="dashboard" element={<AdminDashboardPage />} />
               <Route path="users" element={<UsersPage />} />
