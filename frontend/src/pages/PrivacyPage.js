@@ -1,12 +1,21 @@
 import React from 'react';
 import Navbar from '@/components/Navbar';
 import { Link } from 'react-router-dom';
+import { ArrowLeft, Home } from 'lucide-react';
 
 const PrivacyPage = () => {
     return (
         <div className="min-h-screen bg-[#0a0a0a] text-white">
             <Navbar />
             <div className="max-w-4xl mx-auto px-6 py-16">
+                {/* Back to Home */}
+                <Link
+                    to="/"
+                    className="inline-flex items-center gap-2 text-gray-500 hover:text-emerald-400 transition-colors text-sm mb-8 group"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    Back to Home
+                </Link>
                 <h1 className="text-4xl font-bold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                     Privacy <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">Policy</span>
                 </h1>

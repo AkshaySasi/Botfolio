@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Mail, MessageSquare, Send, MapPin } from 'lucide-react';
+import { Mail, MessageSquare, Send, MapPin, ArrowLeft } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
@@ -32,6 +32,15 @@ const ContactPage = () => {
             <Navbar />
 
             <div className="max-w-6xl mx-auto px-6 py-16">
+                {/* Back to Home */}
+                <Link
+                    to="/"
+                    className="inline-flex items-center gap-2 text-gray-500 hover:text-emerald-400 transition-colors text-sm mb-8 group"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    Back to Home
+                </Link>
+
                 <div className="text-center mb-16">
                     <h1 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                         Get in <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">Touch</span>
