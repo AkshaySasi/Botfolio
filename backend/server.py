@@ -452,29 +452,39 @@ async def delete_portfolio(portfolio_id: str, current_user: User = Depends(get_c
 
 
 @app.put("/api/portfolios/{portfolio_id}")
+@app.patch("/api/portfolios/{portfolio_id}")
 async def update_portfolio(
     portfolio_id: str,
-    name: Optional[str] = None,
-    custom_domain: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    name: Optional[str] = Form(None),
+    custom_url: Optional[str] = Form(None),
+    is_active: Optional[bool] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
-    response = supabase.table("portfolios").select("id").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
+    response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
     update_data = {}
-    if name is not None:
-        update_data['name'] = name
-    if custom_domain is not None:
-        update_data['custom_domain'] = custom_domain
+    if name is not None and name.strip():
+        update_data['name'] = name.strip()
+    if custom_url is not None and custom_url.strip():
+        import re as _re
+        slug = custom_url.strip().lower().replace(" ", "-")
+        if not _re.match(r'^[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]$', slug):
+            raise HTTPException(status_code=400, detail="URL must be 3-40 characters: lowercase letters, numbers, hyphens only")
+        conflict = supabase.table("portfolios").select("id").eq("custom_url", slug).execute()
+        if conflict.data and conflict.data[0]['id'] != portfolio_id:
+            raise HTTPException(status_code=409, detail="This URL is already taken, please choose another")
+        update_data['custom_url'] = slug
     if is_active is not None:
         update_data['is_active'] = is_active
 
     if update_data:
         supabase.table("portfolios").update(update_data).eq("id", portfolio_id).execute()
 
-    return {"message": "Portfolio updated successfully"}
+    return {"message": "Portfolio updated successfully", "updated": update_data}
+
+
 
 
 @app.post("/api/portfolios/{portfolio_id}/update-files")

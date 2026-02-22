@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Allow: /how-it-works
+Allow: /register
+Allow: /login
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+
+# Block private/auth routes from indexing
+Disallow: /dashboard
+Disallow: /builder
+Disallow: /manage/
+Disallow: /analytics/
+Disallow: /settings
+Disallow: /admin/
+
+Sitemap: https://mybotfolio.vercel.app/sitemap.xml

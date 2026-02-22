@@ -20,6 +20,7 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import ContactPage from './pages/ContactPage';
 import HowItWorksPage from './pages/HowItWorksPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 // Admin Pages
 import AdminLayout from './layouts/AdminLayout';
@@ -86,6 +87,11 @@ function App() {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/how-it-works" element={<HowItWorksPage />} />
+          <Route path="/manage/:portfolioId" element={
+            <ProtectedRoute>
+              <PortfolioManagePage />
+            </ProtectedRoute>
+          } />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
@@ -96,6 +102,9 @@ function App() {
             <Route path="coupons" element={<CouponsPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
+
+          {/* 404 Catch-all */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
