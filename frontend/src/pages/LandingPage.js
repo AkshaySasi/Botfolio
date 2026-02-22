@@ -179,11 +179,21 @@ const LandingPage = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-              <Button size="lg" onClick={() => navigate('/register')} className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold text-lg px-8 py-6" data-testid="get-started-btn">
+              <Button
+                size="lg"
+                onClick={() => navigate(user ? '/builder' : '/register')}
+                className="bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold text-lg px-8 py-6"
+                data-testid="get-started-btn"
+              >
                 <Sparkles className="mr-2 h-5 w-5" />
-                Start Building Free
+                {user ? 'Build Now' : 'Start Building Free'}
               </Button>
-              <Button size="lg" variant="outline" className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 px-8 py-6">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => navigate('/how-it-works')}
+                className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 px-8 py-6"
+              >
                 <MessageSquare className="mr-2 h-5 w-5" />
                 See How It Works
               </Button>
