@@ -80,6 +80,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Maintenance mode middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+class MaintenanceMiddleware(BaseHTTPMiddleware):
+    BYPASS_PATHS = {"/api/health", "/api/admin/", "/api/auth/login", "/docs", "/openapi.json"}
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        # Always allow health, admin, and login endpoints
+        if any(path.startswith(p) for p in self.BYPASS_PATHS):
+            return await call_next(request)
+        try:
+            row = supabase.table("settings").select("value").eq("key", "maintenance_mode").single().execute()
+            if row.data and row.data.get("value") == "true":
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "maintenance", "message": "Botfolio is under maintenance. We'll be back shortly!"}
+                )
+        except Exception:
+            pass  # If settings table doesn't exist yet, skip
+        return await call_next(request)
+
+app.add_middleware(MaintenanceMiddleware)
+
 # =============================================
 # HEALTH CHECK — keeps Render warm
 # =============================================
@@ -725,19 +750,74 @@ async def verify_payment(data: PaymentVerification, current_user: User = Depends
 
 @app.get("/api/admin/stats")
 async def get_admin_stats(current_user: User = Depends(check_admin)):
+    """Comprehensive dashboard stats."""
     total_users_resp = supabase.table("users").select("*", count="exact").execute()
     total_portfolios_resp = supabase.table("portfolios").select("*", count="exact").execute()
+    users_data = total_users_resp.data or []
+
+    pro_users = sum(1 for u in users_data if u.get("subscription_tier") not in ("free", None))
+    total_messages_resp = supabase.table("messages").select("*", count="exact").execute()
+
+    # Revenue: sum from users with paid subscriptions
+    # (In real implementation, you'd track payments in a payments table)
+    revenue = 0
+    starter_count = sum(1 for u in users_data if u.get("subscription_tier") == "starter")
+    pro_count = sum(1 for u in users_data if u.get("subscription_tier") == "pro")
+    agency_count = sum(1 for u in users_data if u.get("subscription_tier") == "agency")
+    revenue = (starter_count * 99) + (pro_count * 249) + (agency_count * 999)
+
+    # Maintenance status
+    maint_status = False
+    try:
+        maint_row = supabase.table("settings").select("value").eq("key", "maintenance_mode").single().execute()
+        maint_status = maint_row.data and maint_row.data.get("value") == "true"
+    except Exception:
+        pass
+
+    # Recent signups (last 7 days)
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    recent_users_resp = supabase.table("users").select("*", count="exact").gte("created_at", week_ago).execute()
+
     return {
         "total_users": total_users_resp.count or 0,
         "total_portfolios": total_portfolios_resp.count or 0,
-        "revenue": 0,
-        "pending_approvals": 0
+        "pro_users": pro_users,
+        "revenue": revenue,
+        "total_messages": total_messages_resp.count or 0,
+        "maintenance_mode": maint_status,
+        "new_users_this_week": recent_users_resp.count or 0,
+        "plan_breakdown": {
+            "free": (total_users_resp.count or 0) - pro_users,
+            "starter": starter_count,
+            "pro": pro_count,
+            "agency": agency_count,
+        }
     }
 
-@app.get("/api/admin/users", response_model=List[User])
-async def get_all_users(limit: int = 100, current_user: User = Depends(check_admin)):
-    response = supabase.table("users").select("*").limit(limit).execute()
-    return response.data or []
+
+@app.get("/api/admin/users")
+async def get_all_users(
+    limit: int = 100,
+    offset: int = 0,
+    search: str = "",
+    plan: str = "",
+    current_user: User = Depends(check_admin)
+):
+    """List users with optional search and plan filter."""
+    query = supabase.table("users").select("*", count="exact")
+    if search:
+        query = query.or_(f"name.ilike.%{search}%,email.ilike.%{search}%")
+    if plan and plan != "all":
+        query = query.eq("subscription_tier", plan)
+    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+    response = query.execute()
+    # Strip password hashes from response
+    users = []
+    for u in (response.data or []):
+        u.pop("password_hash", None)
+        users.append(u)
+    return {"users": users, "total": response.count or 0}
+
 
 @app.put("/api/admin/users/{user_id}")
 async def update_user_admin(user_id: str, updates: UserUpdate, current_user: User = Depends(check_admin)):
@@ -746,6 +826,212 @@ async def update_user_admin(user_id: str, updates: UserUpdate, current_user: Use
         return {"message": "No updates provided"}
     await asyncio.to_thread(lambda: supabase.table("users").update(update_data).eq("id", user_id).execute())
     return {"message": "User updated successfully"}
+
+
+@app.post("/api/admin/users/{user_id}/block")
+async def toggle_block_user(user_id: str, current_user: User = Depends(check_admin)):
+    """Block or unblock a user by toggling is_blocked field."""
+    user_resp = supabase.table("users").select("is_blocked").eq("id", user_id).single().execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    new_status = not user_resp.data.get("is_blocked", False)
+    supabase.table("users").update({"is_blocked": new_status}).eq("id", user_id).execute()
+    return {"message": f"User {'blocked' if new_status else 'unblocked'}", "is_blocked": new_status}
+
+
+# ── Maintenance Mode ───────────────────────────────────────────────────
+
+@app.get("/api/admin/maintenance")
+async def get_maintenance_status(current_user: User = Depends(check_admin)):
+    try:
+        row = supabase.table("settings").select("value").eq("key", "maintenance_mode").single().execute()
+        return {"maintenance_mode": row.data and row.data.get("value") == "true"}
+    except Exception:
+        return {"maintenance_mode": False}
+
+
+@app.post("/api/admin/maintenance")
+async def toggle_maintenance(current_user: User = Depends(check_admin)):
+    """Toggle maintenance mode on/off."""
+    try:
+        row = supabase.table("settings").select("value").eq("key", "maintenance_mode").single().execute()
+        current = row.data.get("value", "false") if row.data else "false"
+        new_val = "false" if current == "true" else "true"
+        supabase.table("settings").update({"value": new_val, "updated_at": datetime.now(timezone.utc).isoformat()}).eq("key", "maintenance_mode").execute()
+    except Exception:
+        # Row doesn't exist yet — create it
+        supabase.table("settings").insert({"key": "maintenance_mode", "value": "true", "updated_at": datetime.now(timezone.utc).isoformat()}).execute()
+        new_val = "true"
+    return {"maintenance_mode": new_val == "true", "message": f"Maintenance mode {'enabled' if new_val == 'true' else 'disabled'}"}
+
+
+# ── Coupons ────────────────────────────────────────────────────────────
+
+class CouponCreate(BaseModel):
+    code: str
+    discount_percent: int = Field(ge=1, le=100)
+    max_uses: int = 100
+    expires_at: Optional[str] = None  # ISO datetime string
+
+
+@app.get("/api/admin/coupons")
+async def list_coupons(current_user: User = Depends(check_admin)):
+    resp = supabase.table("coupons").select("*").order("created_at", desc=True).execute()
+    return resp.data or []
+
+
+@app.post("/api/admin/coupons")
+async def create_coupon(coupon: CouponCreate, current_user: User = Depends(check_admin)):
+    code = coupon.code.strip().upper()
+    existing = supabase.table("coupons").select("id").eq("code", code).execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Coupon code already exists")
+    data = {
+        "id": str(uuid.uuid4()),
+        "code": code,
+        "discount_percent": coupon.discount_percent,
+        "max_uses": coupon.max_uses,
+        "current_uses": 0,
+        "expires_at": coupon.expires_at,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    supabase.table("coupons").insert(data).execute()
+    return {"message": "Coupon created", "coupon": data}
+
+
+@app.delete("/api/admin/coupons/{coupon_id}")
+async def delete_coupon(coupon_id: str, current_user: User = Depends(check_admin)):
+    supabase.table("coupons").delete().eq("id", coupon_id).execute()
+    return {"message": "Coupon deleted"}
+
+
+# Public coupon validation (for checkout)
+@app.get("/api/coupons/validate/{code}")
+async def validate_coupon(code: str):
+    resp = supabase.table("coupons").select("*").eq("code", code.strip().upper()).single().execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Invalid coupon code")
+    coupon = resp.data
+    if coupon.get("expires_at"):
+        if datetime.fromisoformat(coupon["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Coupon has expired")
+    if coupon.get("current_uses", 0) >= coupon.get("max_uses", 100):
+        raise HTTPException(status_code=410, detail="Coupon usage limit reached")
+    return {"valid": True, "discount_percent": coupon["discount_percent"], "code": coupon["code"]}
+
+
+# ── Notifications ──────────────────────────────────────────────────────
+
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+
+
+@app.get("/api/admin/notifications")
+async def list_notifications(current_user: User = Depends(check_admin)):
+    resp = supabase.table("notifications").select("*").order("created_at", desc=True).limit(50).execute()
+    return resp.data or []
+
+
+@app.post("/api/admin/notifications")
+async def send_notification(notification: NotificationCreate, current_user: User = Depends(check_admin)):
+    data = {
+        "id": str(uuid.uuid4()),
+        "title": notification.title.strip(),
+        "message": notification.message.strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    supabase.table("notifications").insert(data).execute()
+    return {"message": "Notification sent to all users", "notification": data}
+
+
+# Users can fetch latest notifications
+@app.get("/api/notifications")
+async def get_user_notifications(current_user: User = Depends(get_current_user)):
+    resp = supabase.table("notifications").select("*").order("created_at", desc=True).limit(10).execute()
+    return resp.data or []
+
+
+# ── Revenue / Analytics ────────────────────────────────────────────────
+
+@app.get("/api/admin/revenue")
+async def get_revenue_data(current_user: User = Depends(check_admin)):
+    """Monthly revenue breakdown for charts (last 6 months)."""
+    users_resp = supabase.table("users").select("subscription_tier,created_at").execute()
+    users = users_resp.data or []
+
+    monthly = {}
+    for u in users:
+        tier = u.get("subscription_tier", "free")
+        if tier == "free":
+            continue
+        created = u.get("created_at", "")[:7]  # YYYY-MM
+        if created not in monthly:
+            monthly[created] = 0
+        if tier == "starter":
+            monthly[created] += 99
+        elif tier == "pro":
+            monthly[created] += 249
+        elif tier == "agency":
+            monthly[created] += 999
+
+    # Return sorted last 6 months
+    sorted_months = sorted(monthly.items())[-6:]
+    return {"months": [m[0] for m in sorted_months], "revenue": [m[1] for m in sorted_months]}
+
+
+@app.get("/api/admin/user-growth")
+async def get_user_growth(current_user: User = Depends(check_admin)):
+    """User signups per month for charts (last 6 months)."""
+    users_resp = supabase.table("users").select("created_at").execute()
+    users = users_resp.data or []
+
+    monthly = {}
+    for u in users:
+        month = u.get("created_at", "")[:7]
+        monthly[month] = monthly.get(month, 0) + 1
+
+    sorted_months = sorted(monthly.items())[-6:]
+    return {"months": [m[0] for m in sorted_months], "signups": [m[1] for m in sorted_months]}
+
+
+# ── CSV Exports ────────────────────────────────────────────────────────
+
+@app.get("/api/admin/export/users")
+async def export_users_csv(current_user: User = Depends(check_admin)):
+    from fastapi.responses import StreamingResponse
+    resp = supabase.table("users").select("id,name,email,subscription_tier,portfolios_count,created_at").execute()
+    rows = resp.data or []
+    output = io.StringIO()
+    output.write("id,name,email,plan,portfolios,created_at\n")
+    for r in rows:
+        output.write(f'{r.get("id","")},{r.get("name","")},{r.get("email","")},{r.get("subscription_tier","free")},{r.get("portfolios_count",0)},{r.get("created_at","")}\n')
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=botfolio_users.csv"}
+    )
+
+
+@app.get("/api/admin/export/revenue")
+async def export_revenue_csv(current_user: User = Depends(check_admin)):
+    from fastapi.responses import StreamingResponse
+    resp = supabase.table("users").select("name,email,subscription_tier,created_at").execute()
+    rows = [r for r in (resp.data or []) if r.get("subscription_tier") not in ("free", None)]
+    output = io.StringIO()
+    output.write("name,email,plan,amount,created_at\n")
+    prices = {"starter": 99, "pro": 249, "agency": 999}
+    for r in rows:
+        tier = r.get("subscription_tier", "free")
+        output.write(f'{r.get("name","")},{r.get("email","")},{tier},{prices.get(tier, 0)},{r.get("created_at","")}\n')
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=botfolio_revenue.csv"}
+    )
+
 
 # =============================================
 # CONTACT / MESSAGES
@@ -769,14 +1055,22 @@ async def get_messages(current_user: User = Depends(check_admin)):
     response = supabase.table("messages").select("*").order("created_at", desc=True).limit(100).execute()
     return response.data or []
 
+
 # =============================================
-# HEALTH CHECK
+# MAINTENANCE STATUS (public, for frontend)
 # =============================================
 
-@app.get("/api/health")
-async def health():
-    return {"status": "healthy", "version": "2.0.0"}
+@app.get("/api/maintenance-status")
+async def public_maintenance_status():
+    """Public endpoint for frontend to check if maintenance mode is active."""
+    try:
+        row = supabase.table("settings").select("value").eq("key", "maintenance_mode").single().execute()
+        return {"maintenance": row.data and row.data.get("value") == "true"}
+    except Exception:
+        return {"maintenance": False}
+
 
 @app.on_event("shutdown")
 async def shutdown_client():
     pass
+
