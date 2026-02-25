@@ -166,18 +166,45 @@ def _load_faiss_from_storage(portfolio_id: str, embeddings) -> Optional[FAISS]:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _build_rag_chain(vectorstore: FAISS):
+TONE_PROMPTS = {
+    "professional": "Be professional, polite, and formal. Use business-appropriate language.",
+    "confident": "Be confident, assertive, and direct. Highlight achievements strongly.",
+    "friendly": "Be friendly, approachable, and warm. Use a conversational and welcoming tone.",
+    "technical": "Be technical, precise, and detailed. Focus on skills, tools, and technical specifications.",
+    "executive": "Be concise, high-level, and results-oriented. Focus on impact, strategy, and leadership."
+}
+
+
+def _build_rag_chain(vectorstore: FAISS, tone: str = "professional", context_aware: bool = False):
     """Build a RAG chain using LCEL (LangChain Expression Language) — works on all modern versions."""
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0.2, max_output_tokens=512)
 
+    GUARDRAIL_INSTRUCTION = (
+        "CRITICAL GUARDRAIL: You are a professional AI representative. Stay strictly on topic about the candidate's professional profile, skills, and experience. "
+        "Politely decline to answer questions that are unrelated to the candidate (e.g., general news, math problems, jokes, political opinions, or other people). "
+        "If a question is outside this scope, say: 'I'm here to discuss [Name]'s professional background. Let's get back to their skills or experience.' "
+        "and pivot back to a relevant highlight from the context."
+    )
+
+    tone_instruction = TONE_PROMPTS.get(tone.lower(), TONE_PROMPTS["professional"])
+    
+    system_msg = (
+        "You are an AI assistant representing the professional portfolio of the user.\n"
+        "1. Refer to the portfolio owner by their first name, not 'the individual' or 'the candidate'.\n"
+        "2. If specific information is NOT in the context, say: 'I don't have that information.' Do not guess.\n"
+        f"3. {tone_instruction}\n"
+        "4. Answer strictly based on the context provided below.\n"
+        "5. Respond in the same language the user uses for their message (e.g. if they ask in Hindi, reply in Hindi).\n\n"
+    )
+
+    if context_aware:
+        system_msg += f"5. {GUARDRAIL_INSTRUCTION}\n\n"
+
+    system_msg += "Context:\n{context}"
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system",
-         "You are an AI assistant representing the professional portfolio of the user.\n"
-         "1. Refer to the portfolio owner by their first name, not 'the individual' or 'the candidate'.\n"
-         "2. If specific information is NOT in the context, say: 'I don't have that information.' Do not guess.\n"
-         "3. Be professional, confident, and direct.\n"
-         "4. Answer strictly based on the context provided below.\n\nContext:\n{context}"),
+        ("system", system_msg),
         ("human", "{input}")
     ])
 
@@ -198,7 +225,8 @@ def setup_rag_chain(
     portfolio_id: str,
     resume_path: Optional[str] = None,
     details_path: Optional[str] = None,
-    text_content: Optional[str] = None
+    text_content: Optional[str] = None,
+    tone: str = "professional"
 ):
     """
     Set up RAG chain for a portfolio.
@@ -249,7 +277,7 @@ def setup_rag_chain(
         # Persist to Supabase Storage
         _save_faiss_to_storage(portfolio_id, vectorstore)
 
-        rag_chains[portfolio_id] = _build_rag_chain(vectorstore)
+        rag_chains[portfolio_id] = _build_rag_chain(vectorstore, tone=tone)
         logger.info(f"RAG chain setup complete for portfolio {portfolio_id}")
         return True
 
@@ -258,15 +286,23 @@ def setup_rag_chain(
         raise
 
 
-def query_chatbot(portfolio_id: str, message: str) -> str:
+def clear_rag_chain(portfolio_id: str):
+    """Clear a portfolio's RAG chain from the in-memory cache."""
+    if portfolio_id in rag_chains:
+        del rag_chains[portfolio_id]
+        logger.info(f"Cleared RAG chain for {portfolio_id} from memory")
+
+
+def query_chatbot(portfolio_id: str, message: str, tone: str = "professional", context_aware: bool = False) -> str:
     """Query a portfolio's chatbot. Loads from Supabase Storage if not in memory."""
     try:
+        # If settings changed (tone/guardrail), we assume caller called clear_rag_chain
         if portfolio_id not in rag_chains:
             embeddings = GeminiEmbeddings()
             vectorstore = _load_faiss_from_storage(portfolio_id, embeddings)
             if not vectorstore:
                 raise ValueError(f"Portfolio {portfolio_id} chatbot not found. Please re-upload files.")
-            rag_chains[portfolio_id] = _build_rag_chain(vectorstore)
+            rag_chains[portfolio_id] = _build_rag_chain(vectorstore, tone=tone, context_aware=context_aware)
 
         # LCEL chain returns a string directly (StrOutputParser)
         result = rag_chains[portfolio_id].invoke(message)
@@ -275,3 +311,28 @@ def query_chatbot(portfolio_id: str, message: str) -> str:
     except Exception as e:
         logger.error(f"Query error: {e}")
         raise
+
+
+def generate_summary(messages: list) -> str:
+    """Generate a professional summary of a chat session for a recruiter."""
+    try:
+        llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0.3)
+        
+        chat_history = ""
+        for m in messages:
+            role = "Recruiter" if m['role'] == 'user' else "AI Assistant"
+            chat_history += f"{role}: {m['content']}\n"
+
+        prompt = (
+            "You are an expert talent scout. Summarize the following conversation between a recruiter "
+            "and an AI assistant representing a candidate. Highlight key skills discussed, "
+            "the candidate's fit for potential roles, and any notable achievements mentioned.\n\n"
+            "Keep the summary professional, concise, and formatted with bullet points for readability.\n\n"
+            f"Conversation:\n{chat_history}\n\nSummary:"
+        )
+        
+        result = llm.invoke(prompt)
+        return result.content if hasattr(result, 'content') else str(result)
+    except Exception as e:
+        logger.error(f"Summary generation error: {e}")
+        return "Failed to generate summary."

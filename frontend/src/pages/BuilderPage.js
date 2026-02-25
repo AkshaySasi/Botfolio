@@ -6,7 +6,9 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Upload, Sparkles, ArrowLeft, CheckCircle, FileText, File } from 'lucide-react';
+import { Upload, Sparkles, ArrowLeft, CheckCircle, FileText, File, Shield, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
 
@@ -74,6 +76,8 @@ const BuilderPage = () => {
     resume: null,
     details: null,
     textContent: '',
+    tone: 'professional',
+    contextAware: true,
   });
 
   const handleFileChange = (e, type) => {
@@ -96,6 +100,8 @@ const BuilderPage = () => {
     data.append('resume', formData.resume);
     if (formData.details) data.append('details', formData.details);
     if (formData.textContent) data.append('text_content', formData.textContent);
+    data.append('tone', formData.tone);
+    data.append('context_aware', formData.contextAware);
 
     try {
       await axios.post(`${API_URL}/portfolios/create`, data, {
@@ -252,6 +258,67 @@ const BuilderPage = () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, textContent: e.target.value }))}
                 disabled={loading}
                 className="w-full bg-black/50 border border-emerald-500/30 rounded-xl p-3 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none resize-none"
+              />
+            </div>
+
+            {/* Custom Personality Mode */}
+            <div>
+              <Label className="text-gray-300 mb-3 block">Chatbot Personality Tone</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                {[
+                  { id: 'professional', label: 'Professional', desc: 'Polite & Formal' },
+                  { id: 'confident', label: 'Confident', desc: 'Bold & Direct' },
+                  { id: 'friendly', label: 'Friendly', desc: 'Warm & Helpful' },
+                  { id: 'technical', label: 'Technical', desc: 'Precise & Detailed' },
+                  { id: 'executive', label: 'Executive', desc: 'Concise & Impactful' },
+                ].map((tone) => (
+                  <button
+                    key={tone.id}
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, tone: tone.id }))}
+                    className={`p-3 rounded-xl border transition-all text-left ${formData.tone === tone.id
+                      ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                      : 'border-white/10 bg-black/30 hover:border-white/20'
+                      }`}
+                  >
+                    <div className={`text-xs font-bold mb-0.5 ${formData.tone === tone.id ? 'text-emerald-400' : 'text-gray-300'}`}>
+                      {tone.label}
+                    </div>
+                    <div className="text-[10px] text-gray-500 leading-tight">
+                      {tone.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Context-Aware Mode Add-on */}
+            <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-bold text-white leading-none">Context-Aware Guardrails</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3.5 h-3.5 text-gray-500 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[200px] bg-black border-emerald-500/30 text-xs">
+                          Prevents your bot from answering off-topic questions (e.g. math, jokes) and keeps it focused strictly on your professional profile.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">Recommended for recruiters & official use</p>
+                </div>
+              </div>
+              <Switch
+                checked={formData.contextAware}
+                onCheckedChange={(val) => setFormData(p => ({ ...p, contextAware: val }))}
+                className="data-[state=checked]:bg-emerald-500"
               />
             </div>
 

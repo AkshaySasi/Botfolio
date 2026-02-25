@@ -12,13 +12,36 @@ const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}
 const CheckoutPage = () => {
     const [searchParams] = useSearchParams();
     const planId = searchParams.get('plan');
+    const isAnnual = searchParams.get('cycle') === 'annual';
     const navigate = useNavigate();
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
 
     const plans = {
-        starter: { name: 'Starter', price: 99, features: ['5 Portfolios', '50 queries/day', 'No ads'] },
-        pro: { name: 'Pro', price: 499, features: ['Unlimited everything', 'Premium AI', 'Priority support'] }
+        starter: {
+            name: isAnnual ? 'Pro (Annual)' : 'Pro',
+            price: isAnnual ? 990 : 99,
+            features: ['5 Portfolios', '50 queries/day', 'Recruiter Snapshots', 'AI Skill Radar'],
+            description: isAnnual ? 'Annual Subscription' : 'Monthly Subscription'
+        },
+        pro: {
+            name: isAnnual ? 'Elite (Annual)' : 'Elite',
+            price: isAnnual ? 4980 : 499,
+            features: ['Unlimited Portfolios', 'Unlimited Queries', 'Advanced Recruiter Analytics', 'Enterprise Support'],
+            description: isAnnual ? 'Annual Subscription' : 'Monthly Subscription'
+        },
+        credits_50: {
+            name: '50 Extra Credits',
+            price: 49,
+            features: ['50 One-time AI Queries', 'Never Expires', 'Use when daily limit is reached'],
+            description: 'One-time Credit Purchase'
+        },
+        credits_200: {
+            name: '200 Extra Credits',
+            price: 149,
+            features: ['200 One-time AI Queries', 'Never Expires', 'Best value for heavy users'],
+            description: 'One-time Credit Purchase'
+        }
     };
 
     const plan = plans[planId];
@@ -36,7 +59,7 @@ const CheckoutPage = () => {
         setLoading(true);
         try {
             // Create Razorpay order
-            const orderResponse = await axios.post(`${API_URL}/payment/create - order`, {
+            const orderResponse = await axios.post(`${API_URL}/payment/create-order`, {
                 plan_id: planId
             });
 
@@ -45,19 +68,19 @@ const CheckoutPage = () => {
                 amount: orderResponse.data.amount,
                 currency: orderResponse.data.currency,
                 name: 'Botfolio',
-                description: `${plan.name} Plan Subscription`,
+                description: plan.description,
                 order_id: orderResponse.data.id,
                 handler: async function (response) {
                     try {
                         // Verify payment on backend
-                        await axios.post(`${API_URL} /payment/verify`, {
+                        await axios.post(`${API_URL}/payment/verify`, {
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
                             plan_id: planId
                         });
 
-                        toast.success(`🎉 Welcome to ${plan.name} !Your subscription is now active.`);
+                        toast.success(`🎉 ${plan.name} activated successfully!`);
                         setTimeout(() => navigate('/dashboard'), 2000);
                     } catch (error) {
                         console.error('Payment verification error:', error);
@@ -116,23 +139,26 @@ const CheckoutPage = () => {
                     </div>
 
                     {/* Plan Summary */}
-                    <div className="mb-8 p-6 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/30 rounded-xl">
+                    <div className="mb-8 p-6 bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/30 rounded-xl shadow-lg shadow-emerald-500/5">
                         <div className="flex justify-between items-center mb-4">
                             <div>
-                                <h3 className="text-xl font-bold text-white">{plan.name} Plan</h3>
-                                <p className="text-sm text-gray-400">Billed monthly, cancel anytime</p>
+                                <h3 className="text-xl font-bold text-white">{plan.name}</h3>
+                                <p className="text-sm text-gray-400 capitalize">{plan.description}</p>
                             </div>
                             <div className="text-right">
                                 <p className="text-3xl font-bold text-emerald-400">₹{plan.price}</p>
-                                <p className="text-sm text-gray-400">/month</p>
+                                <p className="text-sm text-gray-400">{planId.startsWith('credits') ? 'one-time' : '/month'}</p>
                             </div>
                         </div>
 
-                        <div className="border-t border-gray-700 pt-4 mt-4">
-                            <p className="text-sm text-gray-400 mb-2">What's included:</p>
-                            <ul className="space-y-1">
+                        <div className="border-t border-gray-700/50 pt-4 mt-4">
+                            <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Checkout Summary</p>
+                            <ul className="space-y-2">
                                 {plan.features.map((feature, i) => (
-                                    <li key={i} className="text-sm text-gray-300">✓ {feature}</li>
+                                    <li key={i} className="text-sm text-gray-300 flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                        {feature}
+                                    </li>
                                 ))}
                             </ul>
                         </div>
@@ -155,9 +181,9 @@ const CheckoutPage = () => {
                     <Button
                         onClick={handlePayment}
                         disabled={loading}
-                        className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-semibold text-lg py-6 disabled:opacity-50"
+                        className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-extrabold text-lg py-7 disabled:opacity-50 shadow-lg shadow-emerald-500/20"
                     >
-                        {loading ? 'Processing...' : `Pay ₹${plan.price} • Subscribe Now`}
+                        {loading ? 'Processing Secure Payment...' : `Complete Payment • ₹${plan.price}`}
                     </Button>
 
                     <p className="text-center text-gray-500 text-xs mt-4">

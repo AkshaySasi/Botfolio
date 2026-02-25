@@ -7,6 +7,17 @@ import {
     LayoutDashboard, Users, MessageSquare, Ticket, Bell, LogOut,
     Shield, Server, Menu, X, ChevronRight, Activity,
 } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
@@ -15,6 +26,7 @@ const AdminLayout = () => {
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [systemOnline, setSystemOnline] = useState(true);
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
     useEffect(() => {
         axios.get(`${API_URL}/api/admin/maintenance`).then(r => {
@@ -100,14 +112,34 @@ const AdminLayout = () => {
                         <LayoutDashboard className="w-4 h-4 mr-2" />
                         Back to App
                     </Button>
-                    <Button
-                        variant="ghost" size="sm"
-                        className="w-full justify-start text-red-500/70 hover:text-red-400 hover:bg-red-900/10 text-sm"
-                        onClick={handleLogout}
-                    >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Logout
-                    </Button>
+                    <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                variant="ghost" size="sm"
+                                className="w-full justify-start text-red-500/70 hover:text-red-400 hover:bg-red-900/10 text-sm"
+                            >
+                                <LogOut className="w-4 h-4 mr-2" />
+                                Logout
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-[#0d0d0d] border-emerald-500/20 text-white">
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="text-xl font-bold">Confirm Log Out</AlertDialogTitle>
+                                <AlertDialogDescription className="text-gray-400">
+                                    Are you sure you want to log out of the Admin Console?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel className="bg-transparent border-white/10 text-gray-400 hover:bg-white/5 hover:text-white">Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={handleLogout}
+                                    className="bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                                >
+                                    Log Out
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </aside>
 

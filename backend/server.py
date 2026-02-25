@@ -31,12 +31,14 @@ try:
 
     # Import RAG engine with error handling
     try:
-        from rag_engine import setup_rag_chain, query_chatbot
+        from rag_engine import setup_rag_chain, query_chatbot, clear_rag_chain, generate_summary
         logger.info("RAG Engine imported successfully")
     except ImportError as e:
         logger.error(f"Failed to import rag_engine: {e}")
         def setup_rag_chain(*args, **kwargs): pass
         def query_chatbot(*args, **kwargs): return "Chatbot unavailable"
+        def clear_rag_chain(*args, **kwargs): pass
+        def generate_summary(*args, **kwargs): return "Summary unavailable"
 
 except Exception as e:
     logger.critical(f"CRITICAL ERROR during imports: {e}")
@@ -57,6 +59,14 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Botfolio API", version="2.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+TECH_KEYWORDS = {
+    "react", "python", "javascript", "fastapi", "supabase", "aws", "docker",
+    "machine learning", "frontend", "backend", "fullstack", "ui/ux", "rust",
+    "next.js", "tailwind", "node.js", "sql", "nosql", "cicd", "git", "java",
+    "c++", "c#", "flutter", "react native", "typescript", "leadership", "management",
+    "agile", "scrum", "devops", "cloud", "security"
+}
 
 security = HTTPBearer()
 
@@ -134,6 +144,7 @@ class User(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30)
     )
     daily_queries_count: int = 0
+    bonus_credits: int = 0
     last_query_date: Optional[datetime] = None
 
 class UserUpdate(BaseModel):
@@ -349,7 +360,11 @@ def _do_rag_setup(portfolio_id: str, resume_url: Optional[str], details_url: Opt
             except Exception as e:
                 logger.error(f"Failed to download details: {e}")
 
-        setup_rag_chain(portfolio_id, resume_path, details_path, text_content)
+        # Fetch tone from config
+        p_resp = supabase.table("portfolios").select("chatbot_config").eq("id", portfolio_id).single().execute()
+        tone = p_resp.data.get("chatbot_config", {}).get("tone", "professional") if p_resp.data else "professional"
+
+        setup_rag_chain(portfolio_id, resume_path, details_path, text_content, tone=tone)
         supabase.table("portfolios").update({"is_processed": True}).eq("id", portfolio_id).execute()
         logger.info(f"Portfolio {portfolio_id} RAG setup complete.")
 
@@ -367,7 +382,9 @@ async def create_portfolio(
     text_content: Optional[str] = Form(None),
     resume: Optional[UploadFile] = File(None),
     details: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    tone: str = Form("professional"),
+    context_aware: bool = Form(True)
 ):
     # Check portfolio limit
     if current_user.subscription_tier == "free" and current_user.portfolios_count >= 1:
@@ -405,7 +422,8 @@ async def create_portfolio(
         resume_url=resume_url,
         details_url=details_url,
         text_content=text_content,
-        is_processed=False
+        is_processed=False,
+        chatbot_config={"tone": tone, "context_aware": context_aware}
     )
 
     portfolio_dict = portfolio.model_dump()
@@ -483,6 +501,8 @@ async def update_portfolio(
     name: Optional[str] = Form(None),
     custom_url: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
+    tone: Optional[str] = Form(None),
+    context_aware: Optional[bool] = Form(None),
     current_user: User = Depends(get_current_user)
 ):
     response = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", current_user.id).single().execute()
@@ -503,6 +523,16 @@ async def update_portfolio(
         update_data['custom_url'] = slug
     if is_active is not None:
         update_data['is_active'] = is_active
+    
+    if tone is not None or context_aware is not None:
+        # chatbot_config is a JSONB column
+        current_config = response.data.get("chatbot_config", {}) or {}
+        if tone is not None: current_config["tone"] = tone
+        if context_aware is not None: current_config["context_aware"] = context_aware
+        
+        update_data["chatbot_config"] = current_config
+        # Clear in-memory chain so it reloads with new settings
+        clear_rag_chain(portfolio_id)
 
     if update_data:
         supabase.table("portfolios").update(update_data).eq("id", portfolio_id).execute()
@@ -570,6 +600,46 @@ async def get_analytics(portfolio_id: str, current_user: User = Depends(get_curr
         "analytics": p_resp.data.get('analytics', {})
     }
 
+
+@app.get("/api/sessions/{session_id}/summary")
+async def get_session_summary(session_id: str, current_user: User = Depends(get_current_user)):
+    """Generate a professional summary of a chat session for a recruiter."""
+    # Verify session belongs to one of user's portfolios
+    # We use a join check or just query session then check portfolio user_id
+    resp = supabase.table("chat_sessions").select("*, portfolios!inner(user_id)").eq("id", session_id).execute()
+    
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = resp.data[0]
+    # In Supabase JS portfolios!inner(user_id) returns as an object/list. 
+    # Let's check ownership
+    if session.get('portfolios', {}).get('user_id') != str(current_user.id):
+         # Try another way if the join return format is different
+         p_id = session.get('portfolio_id')
+         p_check = supabase.table("portfolios").select("user_id").eq("id", p_id).eq("user_id", current_user.id).execute()
+         if not p_check.data:
+             raise HTTPException(status_code=403, detail="Access denied")
+
+    messages = session.get('messages', [])
+    if len(messages) < 2:
+        return {"summary": "Not enough interaction to summarize. Please have a longer conversation first."}
+
+    summary = generate_summary(messages)
+    return {"summary": summary}
+
+
+@app.get("/api/portfolios/{portfolio_id}/sessions")
+async def get_portfolio_sessions(portfolio_id: str, current_user: User = Depends(get_current_user)):
+    """Fetch recent chat sessions for a specific portfolio."""
+    # Verify ownership
+    check = supabase.table("portfolios").select("id").eq("id", portfolio_id).eq("user_id", current_user.id).execute()
+    if not check.data:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    resp = supabase.table("chat_sessions").select("*").eq("portfolio_id", portfolio_id).order("created_at", desc=True).limit(20).execute()
+    return resp.data or []
+
 # =============================================
 # PUBLIC ENDPOINTS
 # =============================================
@@ -630,7 +700,15 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
     daily_limit = daily_limits.get(user.get('subscription_tier', 'free'), 5)
 
     if user.get('daily_queries_count', 0) >= daily_limit:
-        raise HTTPException(status_code=429, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade.")
+        if user.get('bonus_credits', 0) > 0:
+            # Use a bonus credit
+            supabase.table("users").update({
+                "bonus_credits": user['bonus_credits'] - 1,
+                "last_query_date": now.isoformat()
+            }).eq("id", user['id']).execute()
+            # We don't increment daily_queries_count when consuming a bonus credit
+        else:
+            raise HTTPException(status_code=429, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade or purchase more credits.")
 
     # Check subscription expiry
     if user.get('subscription_expiry'):
@@ -653,7 +731,12 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
 
     # Query RAG
     try:
-        answer = query_chatbot(portfolio['id'], chat.message)
+        # Get configuration
+        config = portfolio.get('chatbot_config', {}) or {}
+        tone = config.get('tone', 'professional')
+        context_aware = config.get('context_aware', False)
+
+        answer = query_chatbot(portfolio['id'], chat.message, tone=tone, context_aware=context_aware)
 
         session_data = {
             "id": str(uuid.uuid4()),
@@ -666,6 +749,28 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
             "created_at": now.isoformat()
         }
         supabase.table("chat_sessions").insert(session_data).execute()
+
+        # Update Portfolio Analytics (Recruiter Insights)
+        msg_lower = chat.message.lower()
+        detected_skills = [s for s in TECH_KEYWORDS if s in msg_lower]
+        if detected_skills:
+            try:
+                current_analytics = portfolio.get('analytics', {}) or {}
+                # Ensure structure
+                if 'skills_queried' not in current_analytics:
+                    current_analytics['skills_queried'] = {}
+                
+                skill_counts = current_analytics['skills_queried']
+                for s in detected_skills:
+                    skill_counts[s] = skill_counts.get(s, 0) + 1
+                
+                current_analytics['skills_queried'] = skill_counts
+                # Also track interaction count
+                current_analytics['total_interactions'] = current_analytics.get('total_interactions', 0) + 1
+                
+                supabase.table("portfolios").update({"analytics": current_analytics}).eq("id", portfolio['id']).execute()
+            except Exception as e:
+                logger.error(f"Failed to update portfolio analytics: {e}")
 
         return ChatResponse(response=answer)
 
@@ -701,8 +806,10 @@ class PaymentVerification(BaseModel):
     plan_id: str
 
 PLAN_PRICES = {
-    "starter": 9900,   # ₹99 in paise
-    "pro": 49900       # ₹499 in paise
+    "starter": 9900,   # ₹99
+    "pro": 49900,      # ₹499
+    "credits_50": 4900,   # ₹49 for 50 credits
+    "credits_200": 14900  # ₹149 for 200 credits
 }
 
 @app.post("/api/payment/create-order")
@@ -731,13 +838,29 @@ async def verify_payment(data: PaymentVerification, current_user: User = Depends
             'razorpay_signature': data.razorpay_signature
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
-        expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        supabase.table("users").update({
-            "subscription_tier": data.plan_id,
-            "subscription_expiry": expiry.isoformat(),
-            "daily_queries_count": 0
-        }).eq("id", current_user.id).execute()
-        return {"status": "success", "tier": data.plan_id}
+        
+        if data.plan_id.startswith("credits_"):
+            # Handle credit purchase
+            amount_credits = int(data.plan_id.split("_")[1])
+            # Fetch current bonus_credits (or use current_user if updated)
+            # Fetching fresh to be safe
+            user_resp = supabase.table("users").select("bonus_credits").eq("id", current_user.id).single().execute()
+            current_bonus = user_resp.data.get("bonus_credits", 0) if user_resp.data else 0
+            
+            new_bonus = current_bonus + amount_credits
+            supabase.table("users").update({
+                "bonus_credits": new_bonus
+            }).eq("id", current_user.id).execute()
+            return {"status": "success", "type": "credits", "bonus_credits": new_bonus}
+        else:
+            # Handle tier upgrade
+            expiry = datetime.now(timezone.utc) + timedelta(days=30)
+            supabase.table("users").update({
+                "subscription_tier": data.plan_id,
+                "subscription_expiry": expiry.isoformat(),
+                "daily_queries_count": 0
+            }).eq("id", current_user.id).execute()
+            return {"status": "success", "type": "subscription", "tier": data.plan_id}
     except razorpay.errors.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Payment verification failed")
     except Exception as e:

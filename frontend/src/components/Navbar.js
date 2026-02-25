@@ -6,6 +6,17 @@ import {
     Settings, LogOut, User, Menu, X, Home, Cpu, Star,
     DollarSign, LayoutDashboard, Info, Mail, ChevronRight, Zap,
 } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const NAV_LINKS = [
     { label: 'Home', section: 'home', icon: Home },
@@ -20,6 +31,7 @@ const Navbar = () => {
     const location = useLocation();
     const [menuOpen, setMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const drawerRef = useRef(null);
 
     const isHome = location.pathname === '/';
@@ -153,15 +165,36 @@ const Navbar = () => {
                                 >
                                     <Settings className="w-4.5 h-4.5" />
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={logout}
-                                    className="text-gray-400 hover:text-red-400 hover:bg-red-500/8 p-2 rounded-xl"
-                                    title="Logout"
-                                >
-                                    <LogOut className="w-4.5 h-4.5" />
-                                </Button>
+
+                                <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-gray-400 hover:text-red-400 hover:bg-red-500/8 p-2 rounded-xl"
+                                            title="Logout"
+                                        >
+                                            <LogOut className="w-4.5 h-4.5" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="bg-[#0d0d0d] border-emerald-500/20 text-white">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle className="text-xl font-bold">Confirm Log Out</AlertDialogTitle>
+                                            <AlertDialogDescription className="text-gray-400">
+                                                Are you sure you want to log out of your Botfolio account?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel className="bg-transparent border-white/10 text-gray-400 hover:bg-white/5 hover:text-white">Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={logout}
+                                                className="bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                                            >
+                                                Log Out
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </>
                         ) : (
                             <>
@@ -314,14 +347,35 @@ const Navbar = () => {
                                     <Settings className="w-4.5 h-4.5" />
                                     Settings
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => { logout(); setMenuOpen(false); }}
-                                    className="w-full justify-start gap-3 text-gray-400 hover:text-red-400 hover:bg-red-500/8 rounded-xl"
-                                >
-                                    <LogOut className="w-4.5 h-4.5" />
-                                    Log Out
-                                </Button>
+
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full justify-start gap-3 text-gray-400 hover:text-red-400 hover:bg-red-500/8 rounded-xl"
+                                        >
+                                            <LogOut className="w-4.5 h-4.5" />
+                                            Log Out
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="bg-[#0d0d0d] border-emerald-500/20 text-white mx-4 sm:mx-0">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle className="text-xl font-bold">Confirm Log Out</AlertDialogTitle>
+                                            <AlertDialogDescription className="text-gray-400">
+                                                Are you sure you want to log out?
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                            <AlertDialogCancel className="bg-transparent border-white/10 text-gray-400 hover:bg-white/5 hover:text-white m-0">Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={() => { logout(); setMenuOpen(false); }}
+                                                className="bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white m-0"
+                                            >
+                                                Log Out
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </>
                         ) : (
                             <>

@@ -93,20 +93,56 @@ const DashboardPage = () => {
         {/* User View */}
         {user && (
           <>
-            {/* Header */}
+            {/* Header with Usage Meters */}
             <div className="mb-12">
-              <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                Manage your botfolios
-              </h1>
-              <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Manage your personal chatbots and track their performance
-              </p>
-              <div className="mt-6 flex flex-wrap items-center gap-4">
-                <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                  <span className="text-emerald-400 font-semibold">{user?.subscription_tier?.toUpperCase()} PLAN</span>
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div>
+                  <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    Manage your botfolios
+                  </h1>
+                  <p className="text-gray-400 max-w-lg" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    Control your AI fleet and track their engagement from one central command center.
+                  </p>
                 </div>
-                <div className="text-gray-400">
-                  {portfolios.length} / {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'pro' ? '5' : '∞'} chatbots
+
+                <div className="flex flex-wrap gap-4">
+                  {/* Portfolio Meter */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 min-w-[160px]">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Botfolios</span>
+                      <span className="text-xs font-mono text-emerald-400">
+                        {portfolios.length} / {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'starter' ? '5' : '∞'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 transition-all duration-500"
+                        style={{ width: `${(portfolios.length / (user?.subscription_tier === 'free' ? 1 : user?.subscription_tier === 'starter' ? 5 : 100)) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Daily Queries Meter */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 min-w-[160px]">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Daily Queries</span>
+                      <span className="text-xs font-mono text-emerald-400">
+                        {user?.daily_queries_count || 0} / {user?.subscription_tier === 'free' ? '5' : user?.subscription_tier === 'starter' ? '50' : '∞'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-2">
+                      <div
+                        className="h-full bg-lime-500 transition-all duration-500"
+                        style={{ width: `${((user?.daily_queries_count || 0) / (user?.subscription_tier === 'free' ? 5 : user?.subscription_tier === 'starter' ? 50 : 1000)) * 100}%` }}
+                      />
+                    </div>
+                    {user?.bonus_credits > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[9px] text-emerald-500/60 font-medium">BONUS CREDITS</span>
+                        <span className="text-[10px] text-emerald-400 font-bold">{user.bonus_credits} left</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -129,24 +165,35 @@ const DashboardPage = () => {
               </div>
             )}
 
-            {/* Create New Button */}
-            {canCreateMore() ? (
-              <Button
-                onClick={() => navigate('/builder')}
-                className="mb-8 w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
-                data-testid="create-portfolio-btn"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Create New Chatbot
-              </Button>
-            ) : (
-              <div className="mb-8 p-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
-                <p className="text-yellow-400 mb-3">You've reached your chatbot limit</p>
-                <Button onClick={() => navigate('/#pricing')} className="bg-gradient-to-r from-emerald-500 to-lime-500 text-black">
-                  Upgrade Plan
+            {/* Actions Bar */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
+              {canCreateMore() ? (
+                <Button
+                  onClick={() => navigate('/builder')}
+                  className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
+                  data-testid="create-portfolio-btn"
+                >
+                  <Plus className="mr-2 h-5 w-5" />
+                  Create New Chatbot
                 </Button>
-              </div>
-            )}
+              ) : (
+                <div className="flex-1 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl flex items-center justify-between gap-4">
+                  <p className="text-yellow-400 text-sm">Chatbot limit reached</p>
+                  <Button size="sm" onClick={() => navigate('/pricing')} className="bg-yellow-500 text-black font-bold h-8">
+                    Upgrade
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                onClick={() => navigate('/checkout?plan=credits_200')}
+                className="w-full sm:w-auto border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-medium"
+              >
+                <Zap className="mr-2 h-4 w-4" />
+                Get Extra Credits
+              </Button>
+            </div>
 
             {/* Portfolios Grid */}
             {loading ? (

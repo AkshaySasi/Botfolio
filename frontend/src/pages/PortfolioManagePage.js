@@ -9,8 +9,10 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Upload, BarChart, RefreshCw, FileText,
-  MessageSquare, Eye, Edit3, Save, Globe, Check,
+  MessageSquare, Eye, Edit3, Save, Globe, Check, Shield, Info
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://127.0.0.1:8000'}/api`;
 
@@ -28,6 +30,8 @@ const PortfolioManagePage = () => {
   // Edit tab state
   const [editName, setEditName] = useState('');
   const [editUrl, setEditUrl] = useState('');
+  const [editTone, setEditTone] = useState('professional');
+  const [editContextAware, setEditContextAware] = useState(true);
   const [editDirty, setEditDirty] = useState(false);
 
   useEffect(() => { fetchData(); }, [portfolioId]);
@@ -42,6 +46,8 @@ const PortfolioManagePage = () => {
       setAnalytics(analyticsRes.data);
       setEditName(portfolioRes.data.name || '');
       setEditUrl(portfolioRes.data.custom_url || '');
+      setEditTone(portfolioRes.data.chatbot_config?.tone || 'professional');
+      setEditContextAware(portfolioRes.data.chatbot_config?.context_aware !== false); // default true
     } catch (error) {
       toast.error('Failed to load portfolio data');
       navigate('/dashboard');
@@ -65,6 +71,8 @@ const PortfolioManagePage = () => {
       const fd = new FormData();
       fd.append('name', editName.trim());
       fd.append('custom_url', editUrl.trim().toLowerCase().replace(/\s+/g, '-'));
+      fd.append('tone', editTone);
+      fd.append('context_aware', editContextAware);
       await axios.patch(`${API_URL}/portfolios/${portfolioId}`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -225,6 +233,57 @@ const PortfolioManagePage = () => {
                     />
                   </div>
                   <p className="text-gray-600 text-xs mt-1.5">Only lowercase letters, numbers, and hyphens. 3–40 characters.</p>
+                </div>
+
+                {/* Tone */}
+                <div>
+                  <Label className="text-gray-300 mb-3 block">Chatbot Tone</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
+                    {[
+                      { id: 'professional', label: 'Professional' },
+                      { id: 'confident', label: 'Confident' },
+                      { id: 'friendly', label: 'Friendly' },
+                      { id: 'technical', label: 'Technical' },
+                      { id: 'executive', label: 'Executive' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { setEditTone(t.id); setEditDirty(true); }}
+                        className={`p-2 rounded-lg border text-center transition-all ${editTone === t.id
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                          : 'border-white/10 bg-black/30 text-gray-400 hover:border-white/20'
+                          }`}
+                      >
+                        <div className="text-[10px] font-bold">{t.label}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Context Aware Toggle */}
+                  <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <Shield className="w-5 h-5 text-emerald-400" />
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-white">Smart Guardrails</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="w-3.5 h-3.5 text-gray-500 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>Keep AI focused on your professional profile only.</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={editContextAware}
+                      onCheckedChange={(v) => { setEditContextAware(v); setEditDirty(true); }}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                  </div>
                 </div>
 
                 {/* Live preview */}
