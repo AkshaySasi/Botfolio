@@ -67,31 +67,39 @@ const AdminRoute = ({ children }) => {
 
 // Maintenance mode wrapper — checks if the backend is in maintenance mode
 const MaintenanceWrapper = ({ children }) => {
-  const { user } = useAuth();
+  const { user, backendReady } = useAuth();
   const [maintenance, setMaintenance] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const [showWakingUp, setShowWakingUp] = useState(false);
 
   useEffect(() => {
+    // Check maintenance status in background without blocking initial render
     axios.get(`${API_URL}/api/maintenance-status`).then(r => {
       setMaintenance(r.data.maintenance);
-    }).catch(() => { }).finally(() => setChecked(true));
-  }, []);
+    }).catch(() => { });
 
-  if (!checked) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-        <div className="flex items-center gap-3 mb-8 animate-pulse text-center">
-          <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-12 h-12" />
-          <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-            Botfolio
-          </span>
-        </div>
-      </div>
-    );
-  }
+    // If backend isn't ready in 3 seconds, show "Waking up" feedback
+    const timer = setTimeout(() => {
+      if (!backendReady) setShowWakingUp(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [backendReady]);
+
   // Admins bypass maintenance screen
   if (maintenance && !user?.is_admin) return <MaintenancePage />;
-  return children;
+
+  return (
+    <>
+      {showWakingUp && !backendReady && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md rounded-full flex items-center gap-3 shadow-lg shadow-emerald-500/10">
+          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest whitespace-nowrap">
+            Waking up Botfolio AI Servers...
+          </span>
+        </div>
+      )}
+      {children}
+    </>
+  );
 };
 
 function App() {
