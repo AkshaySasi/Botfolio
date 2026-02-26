@@ -18,29 +18,23 @@ const CheckoutPage = () => {
     const [loading, setLoading] = useState(false);
 
     const plans = {
-        starter: {
-            name: isAnnual ? 'Pro (Annual)' : 'Pro',
-            price: isAnnual ? 990 : 99,
-            features: ['5 Portfolios', '50 queries/day', 'Recruiter Snapshots', 'AI Skill Radar'],
-            description: isAnnual ? 'Annual Subscription' : 'Monthly Subscription'
+        creator: {
+            name: 'Creator',
+            price: 99,
+            features: ['1 Portfolio', '40 AI Conversations/month', 'Remove watermark', '5 Professional Themes', 'Custom personality tones', 'Detailed Analytics', 'Resume improvement suggestions'],
+            description: 'Monthly Subscription'
         },
-        pro: {
-            name: isAnnual ? 'Elite (Annual)' : 'Elite',
-            price: isAnnual ? 4980 : 499,
-            features: ['Unlimited Portfolios', 'Unlimited Queries', 'Advanced Recruiter Analytics', 'Enterprise Support'],
-            description: isAnnual ? 'Annual Subscription' : 'Monthly Subscription'
+        growth: {
+            name: 'Growth',
+            price: 249,
+            features: ['3 Portfolios', '180 AI Conversations/month', 'Advanced Analytics', 'Advanced Customization', 'Dedicated Support', 'API Access', 'Recruiter Snapshot PDF export'],
+            description: 'Monthly Subscription'
         },
-        credits_50: {
-            name: '50 Extra Credits',
-            price: 49,
-            features: ['50 One-time AI Queries', 'Never Expires', 'Use when daily limit is reached'],
-            description: 'One-time Credit Purchase'
-        },
-        credits_200: {
-            name: '200 Extra Credits',
-            price: 149,
-            features: ['200 One-time AI Queries', 'Never Expires', 'Best value for heavy users'],
-            description: 'One-time Credit Purchase'
+        credits_30: {
+            name: '30 Extra Conversations',
+            price: 39,
+            features: ['30 One-time AI Conversations', 'Never Expires', 'Use when monthly limit is reached'],
+            description: 'One-time Add-on'
         }
     };
 

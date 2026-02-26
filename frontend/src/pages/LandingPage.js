@@ -313,12 +313,12 @@ const LandingPage = () => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Free Plan */}
+            {/* Explorer (Free) Plan */}
             <div className="p-8 rounded-2xl bg-gradient-to-br from-gray-800/50 to-transparent border border-gray-700 hover:border-gray-600 transition-all duration-300">
               <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
                 <Bot className="w-6 h-6 text-gray-300" />
               </div>
-              <h3 className="text-2xl font-bold mb-2 text-white">Free</h3>
+              <h3 className="text-2xl font-bold mb-2 text-white">Explorer</h3>
               <p className="text-gray-400 mb-6">Perfect for getting started</p>
               <div className="mb-6">
                 <span className="text-5xl font-bold text-white">₹0</span>
@@ -330,9 +330,10 @@ const LandingPage = () => {
               <ul className="mt-8 space-y-4">
                 {[
                   "1 Portfolio",
-                  "5 Daily Questions (Limited)",
-                  "Basic Analytics",
-                  "Custom URL",
+                  "7 AI Conversations / month",
+                  "Botfolio branding watermark",
+                  "Professional tone only",
+                  "Public shareable link"
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-center text-gray-300">
                     <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center mr-3">
@@ -344,7 +345,7 @@ const LandingPage = () => {
               </ul>
             </div>
 
-            {/* Starter Plan */}
+            {/* Creator Plan */}
             <div className="relative p-8 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-lime-500/10 border-2 border-emerald-500 hover:border-emerald-400 transition-all duration-300 transform scale-105">
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-emerald-500 to-lime-500 rounded-full text-black text-sm font-bold">
                 MOST POPULAR
@@ -352,26 +353,27 @@ const LandingPage = () => {
               <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center mb-4">
                 <Sparkles className="w-6 h-6 text-black" />
               </div>
-              <h3 className="text-2xl font-bold mb-2 text-white">Starter</h3>
-              <p className="text-gray-300 mb-6">For hobbyists & students</p>
+              <h3 className="text-2xl font-bold mb-2 text-white">Creator</h3>
+              <p className="text-gray-300 mb-6">For serious candidates</p>
               <div className="mb-6">
                 <span className="text-5xl font-bold text-white">₹99</span>
                 <span className="text-gray-300">/month</span>
               </div>
               <Button
                 className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
-                onClick={() => handlePayment('starter')}
-                data-testid="starter-plan-btn"
+                onClick={() => handlePayment('creator')}
+                data-testid="creator-plan-btn"
               >
-                Get Starter
+                Get Creator
               </Button>
               <ul className="mt-8 space-y-4">
                 {[
                   "1 Portfolio",
-                  "50 Daily Questions",
+                  "40 AI Conversations / month",
+                  "Remove watermark",
+                  "5 Professional Themes",
                   "Detailed Analytics",
-                  "Custom URLs",
-                  "Priority Support",
+                  "Custom personality tones"
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-center text-white">
                     <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center mr-3">
@@ -383,32 +385,32 @@ const LandingPage = () => {
               </ul>
             </div>
 
-            {/* Pro Plan */}
+            {/* Growth Plan */}
             <div className="p-8 rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-700 hover:border-purple-600 transition-all duration-300">
               <div className="w-12 h-12 rounded-lg bg-purple-700 flex items-center justify-center mb-4">
                 <BarChart className="w-6 h-6 text-purple-200" />
               </div>
-              <h3 className="text-2xl font-bold mb-2 text-white">Pro</h3>
-              <p className="text-gray-400 mb-6">For power users</p>
+              <h3 className="text-2xl font-bold mb-2 text-white">Growth</h3>
+              <p className="text-gray-400 mb-6">For ambitious professionals</p>
               <div className="mb-6">
-                <span className="text-5xl font-bold text-white">₹499</span>
+                <span className="text-5xl font-bold text-white">₹249</span>
                 <span className="text-gray-400">/month</span>
               </div>
               <Button
                 className="w-full bg-purple-700 hover:bg-purple-600 text-white"
-                onClick={() => handlePayment('pro')}
-                data-testid="pro-plan-btn"
+                onClick={() => handlePayment('growth')}
+                data-testid="growth-plan-btn"
               >
-                Go Pro
+                Get Growth
               </Button>
               <ul className="mt-8 space-y-4">
                 {[
-                  "5 Portfolios",
-                  "Unlimited Questions",
+                  "3 Portfolios",
+                  "180 AI Conversations / month",
                   "Advanced Analytics",
-                  "Custom Domains",
-                  "Dedicated Support",
+                  "Advanced customization",
                   "API Access",
+                  "Recruiter Snapshot PDF export"
                 ].map((item, idx) => (
                   <li key={idx} className="flex items-center text-gray-300">
                     <div className="w-5 h-5 rounded-full bg-purple-700 flex items-center justify-center mr-3">

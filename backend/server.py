@@ -387,8 +387,12 @@ async def create_portfolio(
     context_aware: bool = Form(True)
 ):
     # Check portfolio limit
-    if current_user.subscription_tier == "free" and current_user.portfolios_count >= 1:
-        raise HTTPException(status_code=403, detail="Free tier allows only 1 portfolio. Upgrade to create more.")
+    tier = current_user.subscription_tier or "free"
+    portfolio_limits = {"free": 1, "creator": 1, "growth": 3, "enterprise": 9999}
+    p_limit = portfolio_limits.get(tier, 1)
+
+    if current_user.portfolios_count >= p_limit:
+        raise HTTPException(status_code=403, detail=f"{tier.capitalize()} tier allows {p_limit} portfolio(s). Upgrade to create more.")
 
     custom_url = validate_custom_url(custom_url)
 
@@ -681,7 +685,7 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
 
     now = datetime.now(timezone.utc)
 
-    # Reset daily count if new day
+    # Reset monthly count if new month
     if user.get('last_query_date'):
         try:
             last_date_str = user['last_query_date']
@@ -689,17 +693,17 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
                 last_date = datetime.fromisoformat(last_date_str.replace('Z', '+00:00'))
             else:
                 last_date = last_date_str
-            if last_date.date() < now.date():
+            if last_date.month != now.month or last_date.year != now.year:
                 supabase.table("users").update({"daily_queries_count": 0}).eq("id", user['id']).execute()
                 user['daily_queries_count'] = 0
         except Exception:
             pass
 
-    # Check daily limits by tier
-    daily_limits = {"free": 5, "starter": 50, "pro": 999999, "enterprise": 999999}
-    daily_limit = daily_limits.get(user.get('subscription_tier', 'free'), 5)
+    # Check monthly limits by tier (keeping DB field name as daily_queries_count for compatibility)
+    monthly_limits = {"free": 7, "creator": 40, "growth": 180, "enterprise": 999999}
+    monthly_limit = monthly_limits.get(user.get('subscription_tier', 'free'), 7)
 
-    if user.get('daily_queries_count', 0) >= daily_limit:
+    if user.get('daily_queries_count', 0) >= monthly_limit:
         if user.get('bonus_credits', 0) > 0:
             # Use a bonus credit
             supabase.table("users").update({
@@ -708,7 +712,7 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
             }).eq("id", user['id']).execute()
             # We don't increment daily_queries_count when consuming a bonus credit
         else:
-            raise HTTPException(status_code=429, detail=f"Daily chat limit of {daily_limit} reached. Please upgrade or purchase more credits.")
+            raise HTTPException(status_code=429, detail=f"Monthly chat limit of {monthly_limit} reached. Please upgrade or purchase an add-on.")
 
     # Check subscription expiry
     if user.get('subscription_expiry'):
@@ -806,10 +810,9 @@ class PaymentVerification(BaseModel):
     plan_id: str
 
 PLAN_PRICES = {
-    "starter": 9900,   # ₹99
-    "pro": 49900,      # ₹499
-    "credits_50": 4900,   # ₹49 for 50 credits
-    "credits_200": 14900  # ₹149 for 200 credits
+    "creator": 9900,   # ₹99
+    "growth": 24900,   # ₹249
+    "credits_30": 3900 # ₹39 for 30 credits
 }
 
 @app.post("/api/payment/create-order")
@@ -884,10 +887,9 @@ async def get_admin_stats(current_user: User = Depends(check_admin)):
     # Revenue: sum from users with paid subscriptions
     # (In real implementation, you'd track payments in a payments table)
     revenue = 0
-    starter_count = sum(1 for u in users_data if u.get("subscription_tier") == "starter")
-    pro_count = sum(1 for u in users_data if u.get("subscription_tier") == "pro")
-    agency_count = sum(1 for u in users_data if u.get("subscription_tier") == "agency")
-    revenue = (starter_count * 99) + (pro_count * 249) + (agency_count * 999)
+    creator_count = sum(1 for u in users_data if u.get("subscription_tier") == "creator")
+    growth_count = sum(1 for u in users_data if u.get("subscription_tier") == "growth")
+    revenue = (creator_count * 99) + (growth_count * 249)
 
     # Maintenance status
     maint_status = False
@@ -911,9 +913,8 @@ async def get_admin_stats(current_user: User = Depends(check_admin)):
         "new_users_this_week": recent_users_resp.count or 0,
         "plan_breakdown": {
             "free": (total_users_resp.count or 0) - pro_users,
-            "starter": starter_count,
-            "pro": pro_count,
-            "agency": agency_count,
+            "creator": creator_count,
+            "growth": growth_count,
         }
     }
 
@@ -1091,12 +1092,10 @@ async def get_revenue_data(current_user: User = Depends(check_admin)):
         created = u.get("created_at", "")[:7]  # YYYY-MM
         if created not in monthly:
             monthly[created] = 0
-        if tier == "starter":
+        if tier == "creator":
             monthly[created] += 99
-        elif tier == "pro":
+        elif tier == "growth":
             monthly[created] += 249
-        elif tier == "agency":
-            monthly[created] += 999
 
     # Return sorted last 6 months
     sorted_months = sorted(monthly.items())[-6:]

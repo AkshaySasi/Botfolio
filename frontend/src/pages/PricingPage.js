@@ -8,54 +8,59 @@ import Navbar from '@/components/Navbar';
 const PricingPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const [isAnnual, setIsAnnual] = React.useState(false);
 
 
     const plans = [
         {
-            name: 'Free',
+            name: 'Explorer (Free)',
             price: '₹0',
             features: [
-                '1 Portfolio Chatbot',
-                '5 AI Queries / day',
-                'Standard UI',
-                'Community Support'
+                '7 AI Conversations / month',
+                '1 Portfolio',
+                'Botfolio branding watermark',
+                'Basic theme (no customization)',
+                'Public shareable link',
+                'Professional tone only',
+                'Recruiter interaction counter'
             ],
             cta: 'Current Plan',
-            disabled: true
+            disabled: true,
+            planId: 'free'
         },
         {
-            name: 'Pro',
-            price: isAnnual ? '₹82' : '₹99',
+            name: 'Creator',
+            price: '₹99',
             period: '/month',
-            subtext: isAnnual ? 'Billed ₹990 annually' : 'Billed monthly',
+            subtext: 'Billed monthly',
             features: [
-                '5 Portfolio Chatbots',
-                '50 AI Queries / day',
-                'Custom Personality Tones',
-                'Recruiter Snapshot Export',
-                'AI Skill Radar',
-                'No Botfolio Branding'
+                '40 AI Conversations / month',
+                '1 Portfolio',
+                'Remove watermark',
+                '5 Professional Themes',
+                'Custom personality tones',
+                'Detailed Analytics',
+                'Resume improvement suggestions'
             ],
-            planId: 'starter',
+            planId: 'creator',
             popular: true,
-            badge: 'Limited: Founding Member'
+            badge: 'Most Popular'
         },
         {
-            name: 'Elite',
-            price: isAnnual ? '₹415' : '₹499',
+            name: 'Growth',
+            price: '₹249',
             period: '/month',
-            subtext: isAnnual ? 'Billed ₹4,980 annually' : 'Billed monthly',
+            subtext: 'Billed monthly',
             features: [
-                'Unlimited Portfolio Chatbots',
-                'Priority AI (No wait times)',
-                'White-label Solution',
-                'Custom Domains (Soon)',
-                'Priority Engineering Support',
-                'Advanced Recruiter Analytics'
+                '180 AI Conversations / month',
+                '3 Portfolios',
+                'Advanced Analytics',
+                'Advanced customization (no branding)',
+                'Dedicated Support',
+                'API Access',
+                'Recruiter Snapshot PDF export'
             ],
-            planId: 'pro',
-            badge: 'Enterprise Grade'
+            planId: 'growth',
+            badge: 'AI Career Infrastructure'
         }
     ];
 
@@ -64,7 +69,7 @@ const PricingPage = () => {
             navigate('/register');
             return;
         }
-        navigate(`/checkout?plan=${planId}${isAnnual ? '&cycle=annual' : ''}`);
+        navigate(`/checkout?plan=${planId}`);
     };
 
     return (
@@ -80,19 +85,7 @@ const PricingPage = () => {
                     Join the elite circle of professionals using AI to stand out.
                 </p>
 
-                {/* Billing Toggle */}
-                <div className="flex items-center justify-center gap-4 mb-12">
-                    <span className={`text-sm ${!isAnnual ? 'text-white' : 'text-gray-500'}`}>Monthly</span>
-                    <button
-                        onClick={() => setIsAnnual(!isAnnual)}
-                        className="w-14 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 p-1 transition-all relative"
-                    >
-                        <div className={`w-5 h-5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all ${isAnnual ? 'translate-x-7' : 'translate-x-0'}`} />
-                    </button>
-                    <span className={`text-sm ${isAnnual ? 'text-white' : 'text-gray-500'}`}>
-                        Annual <span className="text-emerald-400 font-bold ml-1">(-20%)</span>
-                    </span>
-                </div>
+                {/* Removed Billing Toggle */}
             </div>
 
             {/* Pricing Cards */}

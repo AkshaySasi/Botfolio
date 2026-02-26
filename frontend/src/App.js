@@ -93,7 +93,7 @@ const MaintenanceWrapper = ({ children }) => {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md rounded-full flex items-center gap-3 shadow-lg shadow-emerald-500/10">
           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
           <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest whitespace-nowrap">
-            Waking up Botfolio AI Servers...
+            Waking up Botfolio Servers...
           </span>
         </div>
       )}
