@@ -51,7 +51,8 @@ const DashboardPage = () => {
   const canCreateMore = () => {
     if (!user) return false;
     if (user?.subscription_tier === 'free') return portfolios.length < 1;
-    if (user?.subscription_tier === 'pro') return portfolios.length < 5;
+    if (user?.subscription_tier === 'creator') return portfolios.length < 1;
+    if (user?.subscription_tier === 'growth') return portfolios.length < 3;
     return true; // enterprise
   };
 
@@ -111,34 +112,34 @@ const DashboardPage = () => {
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Botfolios</span>
                       <span className="text-xs font-mono text-emerald-400">
-                        {portfolios.length} / {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'starter' ? '5' : '∞'}
+                        {portfolios.length} / {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'creator' ? '1' : user?.subscription_tier === 'growth' ? '3' : '∞'}
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-emerald-500 transition-all duration-500"
-                        style={{ width: `${(portfolios.length / (user?.subscription_tier === 'free' ? 1 : user?.subscription_tier === 'starter' ? 5 : 100)) * 100}%` }}
+                        style={{ width: `${(portfolios.length / (user?.subscription_tier === 'free' ? 1 : user?.subscription_tier === 'creator' ? 1 : user?.subscription_tier === 'growth' ? 3 : 100)) * 100}%` }}
                       />
                     </div>
                   </div>
 
-                  {/* Daily Queries Meter */}
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 min-w-[160px]">
+                  {/* Monthly Conversations Meter */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 min-w-[170px]">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Daily Queries</span>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Monthly Conversations</span>
                       <span className="text-xs font-mono text-emerald-400">
-                        {user?.daily_queries_count || 0} / {user?.subscription_tier === 'free' ? '5' : user?.subscription_tier === 'starter' ? '50' : '∞'}
+                        {user?.daily_queries_count || 0} / {user?.subscription_tier === 'free' ? '7' : user?.subscription_tier === 'creator' ? '40' : user?.subscription_tier === 'growth' ? '180' : '∞'}
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-2">
                       <div
                         className="h-full bg-lime-500 transition-all duration-500"
-                        style={{ width: `${((user?.daily_queries_count || 0) / (user?.subscription_tier === 'free' ? 5 : user?.subscription_tier === 'starter' ? 50 : 1000)) * 100}%` }}
+                        style={{ width: `${((user?.daily_queries_count || 0) / (user?.subscription_tier === 'free' ? 7 : user?.subscription_tier === 'creator' ? 40 : user?.subscription_tier === 'growth' ? 180 : 1000)) * 100}%` }}
                       />
                     </div>
                     {user?.bonus_credits > 0 && (
                       <div className="flex justify-between items-center">
-                        <span className="text-[9px] text-emerald-500/60 font-medium">BONUS CREDITS</span>
+                        <span className="text-[9px] text-emerald-500/60 font-medium">BONUS CONVERSATIONS</span>
                         <span className="text-[10px] text-emerald-400 font-bold">{user.bonus_credits} left</span>
                       </div>
                     )}
@@ -153,7 +154,7 @@ const DashboardPage = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2">🚀 Upgrade to do more</h3>
-                    <p className="text-gray-300">Create up to 5 portfolios and get 50 queries per day with Starter plan</p>
+                    <p className="text-gray-300">Get up to 40 AI conversations per month with the Creator plan</p>
                   </div>
                   <Button
                     onClick={() => navigate('/pricing')}
@@ -187,11 +188,11 @@ const DashboardPage = () => {
 
               <Button
                 variant="outline"
-                onClick={() => navigate('/checkout?plan=credits_200')}
+                onClick={() => navigate('/checkout?plan=credits_30')}
                 className="w-full sm:w-auto border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-medium"
               >
                 <Zap className="mr-2 h-4 w-4" />
-                Get Extra Credits
+                Get Extra Conversations
               </Button>
             </div>
 
@@ -336,8 +337,8 @@ const DashboardPage = () => {
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
                 <Zap className="w-7 h-7 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Daily Limit Reached</h3>
-              <p className="text-gray-400 text-sm">You've used all 5 free AI requests for today. Upgrade to get unlimited daily queries.</p>
+              <h3 className="text-xl font-bold text-white mb-2">Monthly Limit Reached</h3>
+              <p className="text-gray-400 text-sm">You've used all 7 free AI conversations for this month. Upgrade to get more monthly conversations.</p>
             </div>
             <div className="space-y-3">
               <Button

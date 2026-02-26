@@ -11,9 +11,8 @@ const PAGE_SIZE = 20;
 
 const planColors = {
     free: 'border-gray-700 text-gray-400',
-    starter: 'border-blue-500/30 text-blue-400 bg-blue-500/10',
-    pro: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
-    agency: 'border-purple-500/30 text-purple-400 bg-purple-500/10',
+    creator: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
+    growth: 'border-purple-500/30 text-purple-400 bg-purple-500/10',
 };
 
 const UsersPage = () => {
@@ -84,11 +83,11 @@ const UsersPage = () => {
                         value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </form>
                 <div className="flex gap-1.5">
-                    {['all', 'free', 'starter', 'pro', 'agency'].map(p => (
+                    {['all', 'free', 'creator', 'growth'].map(p => (
                         <button key={p} onClick={() => { setPlanFilter(p); setPage(0); }}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${planFilter === p
-                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                    : 'text-gray-500 hover:text-white bg-white/[0.03] border border-transparent'
+                                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                : 'text-gray-500 hover:text-white bg-white/[0.03] border border-transparent'
                                 }`}>{p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}</button>
                     ))}
                 </div>

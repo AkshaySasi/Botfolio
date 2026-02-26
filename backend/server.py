@@ -906,13 +906,13 @@ async def get_admin_stats(current_user: User = Depends(check_admin)):
     return {
         "total_users": total_users_resp.count or 0,
         "total_portfolios": total_portfolios_resp.count or 0,
-        "pro_users": pro_users,
+        "growth_users": growth_count,
         "revenue": revenue,
         "total_messages": total_messages_resp.count or 0,
         "maintenance_mode": maint_status,
         "new_users_this_week": recent_users_resp.count or 0,
         "plan_breakdown": {
-            "free": (total_users_resp.count or 0) - pro_users,
+            "free": (total_users_resp.count or 0) - creator_count - growth_count,
             "creator": creator_count,
             "growth": growth_count,
         }

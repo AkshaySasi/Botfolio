@@ -114,7 +114,7 @@ const AdminDashboardPage = () => {
                     color="bg-amber-500" gradient="bg-amber-500/5 border-amber-500/15" />
                 <StatCard icon={DollarSign} label="Revenue" value={`₹${stats?.revenue || 0}`}
                     color="bg-emerald-600" gradient="bg-emerald-500/5 border-emerald-500/15" />
-                <StatCard icon={Zap} label="Pro Users" value={stats?.pro_users || 0}
+                <StatCard icon={Zap} label="Growth Users" value={stats?.growth_users || stats?.pro_users || 0}
                     color="bg-purple-600" gradient="bg-purple-500/5 border-purple-500/15" />
                 <StatCard icon={MessageSquare} label="Messages" value={stats?.total_messages || 0}
                     color="bg-rose-600" gradient="bg-rose-500/5 border-rose-500/15" />
