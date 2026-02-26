@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar';
 const PricingPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-
+    const [isAnnual, setIsAnnual] = useState(false);
 
     const plans = [
         {
@@ -29,9 +29,9 @@ const PricingPage = () => {
         },
         {
             name: 'Creator',
-            price: '₹99',
-            period: '/month',
-            subtext: 'Billed monthly',
+            price: isAnnual ? '₹990' : '₹99',
+            period: isAnnual ? '/year' : '/month',
+            subtext: isAnnual ? 'Save 16% billed annually' : 'Billed monthly',
             features: [
                 '40 AI Conversations / month',
                 '1 Portfolio',
@@ -47,9 +47,9 @@ const PricingPage = () => {
         },
         {
             name: 'Growth',
-            price: '₹249',
-            period: '/month',
-            subtext: 'Billed monthly',
+            price: isAnnual ? '₹2490' : '₹249',
+            period: isAnnual ? '/year' : '/month',
+            subtext: isAnnual ? 'Save 16% billed annually' : 'Billed monthly',
             features: [
                 '180 AI Conversations / month',
                 '3 Portfolios',
@@ -69,7 +69,7 @@ const PricingPage = () => {
             navigate('/register');
             return;
         }
-        navigate(`/checkout?plan=${planId}`);
+        navigate(`/checkout?plan=${planId}${isAnnual && planId !== 'free' ? '&cycle=annual' : ''}`);
     };
 
     return (
@@ -85,7 +85,20 @@ const PricingPage = () => {
                     Join the elite circle of professionals using AI to stand out.
                 </p>
 
-                {/* Removed Billing Toggle */}
+                {/* Billing Toggle */}
+                <div className="flex items-center justify-center gap-4 mb-16">
+                    <span className={`text-sm font-semibold transition-colors ${!isAnnual ? 'text-white' : 'text-gray-500'}`}>Monthly Billing</span>
+                    <button
+                        onClick={() => setIsAnnual(!isAnnual)}
+                        className="relative w-16 h-8 rounded-full bg-[#1a1a1a] border border-white/10 p-1 transition-colors hover:border-emerald-500/50"
+                    >
+                        <div className={`w-6 h-6 rounded-full bg-gradient-to-r from-emerald-500 to-lime-500 transition-transform duration-300 ${isAnnual ? 'translate-x-8' : 'translate-x-0'}`} />
+                    </button>
+                    <span className={`text-sm font-semibold transition-colors flex items-center gap-2 ${isAnnual ? 'text-white' : 'text-gray-500'}`}>
+                        Annual Billing
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Save 16%</span>
+                    </span>
+                </div>
             </div>
 
             {/* Pricing Cards */}
@@ -93,9 +106,9 @@ const PricingPage = () => {
                 {plans.map((plan, idx) => (
                     <div
                         key={idx}
-                        className={`relative p-6 sm:p-8 rounded-2xl border transition-all hover:scale-105 ${plan.popular
-                            ? 'border-emerald-500 bg-gradient-to-b from-emerald-500/10 to-transparent shadow-xl shadow-emerald-500/20'
-                            : 'border-gray-800 bg-gray-900/50'
+                        className={`relative p-6 sm:p-8 rounded-2xl border transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-2xl ${plan.popular
+                            ? 'border-emerald-500 bg-gradient-to-b from-emerald-500/10 to-transparent shadow-emerald-500/20'
+                            : 'border-gray-800 bg-gray-900/50 hover:border-gray-600'
                             }`}
                     >
                         {/* Badge */}

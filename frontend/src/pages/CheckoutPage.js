@@ -20,15 +20,15 @@ const CheckoutPage = () => {
     const plans = {
         creator: {
             name: 'Creator',
-            price: 99,
+            price: isAnnual ? 990 : 99,
             features: ['1 Portfolio', '40 AI Conversations/month', 'Remove watermark', '5 Professional Themes', 'Custom personality tones', 'Detailed Analytics', 'Resume improvement suggestions'],
-            description: 'Monthly Subscription'
+            description: isAnnual ? 'Annual Subscription (Save 16%)' : 'Monthly Subscription'
         },
         growth: {
             name: 'Growth',
-            price: 249,
+            price: isAnnual ? 2490 : 249,
             features: ['3 Portfolios', '180 AI Conversations/month', 'Advanced Analytics', 'Advanced Customization', 'Dedicated Support', 'API Access', 'Recruiter Snapshot PDF export'],
-            description: 'Monthly Subscription'
+            description: isAnnual ? 'Annual Subscription (Save 16%)' : 'Monthly Subscription'
         },
         credits_30: {
             name: '30 Extra Conversations',
@@ -54,7 +54,7 @@ const CheckoutPage = () => {
         try {
             // Create Razorpay order
             const orderResponse = await axios.post(`${API_URL}/payment/create-order`, {
-                plan_id: planId
+                plan_id: isAnnual ? `${planId}_annual` : planId
             });
 
             const options = {
@@ -71,7 +71,7 @@ const CheckoutPage = () => {
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
-                            plan_id: planId
+                            plan_id: isAnnual ? `${planId}_annual` : planId
                         });
 
                         toast.success(`🎉 ${plan.name} activated successfully!`);
@@ -141,7 +141,7 @@ const CheckoutPage = () => {
                             </div>
                             <div className="text-right">
                                 <p className="text-3xl font-bold text-emerald-400">₹{plan.price}</p>
-                                <p className="text-sm text-gray-400">{planId.startsWith('credits') ? 'one-time' : '/month'}</p>
+                                <p className="text-sm text-gray-400">{planId.startsWith('credits') ? 'one-time' : (isAnnual ? '/year' : '/month')}</p>
                             </div>
                         </div>
 

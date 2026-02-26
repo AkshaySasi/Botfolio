@@ -22,7 +22,7 @@ const NAV_LINKS = [
     { label: 'Home', section: 'home', icon: Home },
     { label: 'How it Works', href: '/how-it-works', icon: Info },
     { label: 'Features', section: 'features', icon: Zap },
-    { label: 'Pricing', section: 'pricing', icon: DollarSign },
+    { label: 'Pricing', href: '/pricing', icon: DollarSign },
 ];
 
 const Navbar = () => {

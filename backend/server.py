@@ -812,6 +812,8 @@ class PaymentVerification(BaseModel):
 PLAN_PRICES = {
     "creator": 9900,   # ₹99
     "growth": 24900,   # ₹249
+    "creator_annual": 99000, # ₹990
+    "growth_annual": 249000, # ₹2490
     "credits_30": 3900 # ₹39 for 30 credits
 }
 

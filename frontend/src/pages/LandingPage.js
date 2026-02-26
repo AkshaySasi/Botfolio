@@ -101,6 +101,7 @@ const SlotNumber = ({ target, duration = 1800 }) => {
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [isAnnual, setIsAnnual] = useState(false);
 
   const handlePayment = async (planId) => {
     if (!user) {
@@ -307,9 +308,24 @@ const LandingPage = () => {
             <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Simple, Transparent Pricing
             </h2>
-            <p className="text-xl text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <p className="text-xl text-gray-400 mb-10" style={{ fontFamily: 'Inter, sans-serif' }}>
               Start free, upgrade as you grow. No hidden fees, cancel anytime.
             </p>
+
+            {/* Billing Toggle */}
+            <div className="flex items-center justify-center gap-4">
+              <span className={`text-sm font-semibold transition-colors ${!isAnnual ? 'text-white' : 'text-gray-500'}`}>Monthly Billing</span>
+              <button
+                onClick={() => setIsAnnual(!isAnnual)}
+                className="relative w-16 h-8 rounded-full bg-[#1a1a1a] border border-white/10 p-1 transition-colors hover:border-emerald-500/50"
+              >
+                <div className={`w-6 h-6 rounded-full bg-gradient-to-r from-emerald-500 to-lime-500 transition-transform duration-300 ${isAnnual ? 'translate-x-8' : 'translate-x-0'}`} />
+              </button>
+              <span className={`text-sm font-semibold transition-colors flex items-center gap-2 ${isAnnual ? 'text-white' : 'text-gray-500'}`}>
+                Annual Billing
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Save 16%</span>
+              </span>
+            </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -346,7 +362,7 @@ const LandingPage = () => {
             </div>
 
             {/* Creator Plan */}
-            <div className="relative p-8 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-lime-500/10 border-2 border-emerald-500 hover:border-emerald-400 transition-all duration-300 transform scale-105">
+            <div className="relative p-8 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-lime-500/10 border-2 border-emerald-500 hover:border-emerald-400 transition-all duration-300 ease-in-out hover:shadow-2xl hover:shadow-emerald-500/20 transform hover:scale-105">
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-emerald-500 to-lime-500 rounded-full text-black text-sm font-bold">
                 MOST POPULAR
               </div>
@@ -356,12 +372,12 @@ const LandingPage = () => {
               <h3 className="text-2xl font-bold mb-2 text-white">Creator</h3>
               <p className="text-gray-300 mb-6">For serious candidates</p>
               <div className="mb-6">
-                <span className="text-5xl font-bold text-white">₹99</span>
-                <span className="text-gray-300">/month</span>
+                <span className="text-5xl font-bold text-white">₹{isAnnual ? '990' : '99'}</span>
+                <span className="text-gray-300">/{isAnnual ? 'year' : 'month'}</span>
               </div>
               <Button
                 className="w-full bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black font-bold"
-                onClick={() => handlePayment('creator')}
+                onClick={() => handlePayment(isAnnual ? 'creator_annual' : 'creator')}
                 data-testid="creator-plan-btn"
               >
                 Get Creator
@@ -386,19 +402,19 @@ const LandingPage = () => {
             </div>
 
             {/* Growth Plan */}
-            <div className="p-8 rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-700 hover:border-purple-600 transition-all duration-300">
+            <div className="p-8 rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-700 hover:border-purple-600 transition-all duration-300 ease-in-out hover:shadow-2xl hover:shadow-purple-500/20 transform hover:scale-105">
               <div className="w-12 h-12 rounded-lg bg-purple-700 flex items-center justify-center mb-4">
                 <BarChart className="w-6 h-6 text-purple-200" />
               </div>
               <h3 className="text-2xl font-bold mb-2 text-white">Growth</h3>
               <p className="text-gray-400 mb-6">For ambitious professionals</p>
               <div className="mb-6">
-                <span className="text-5xl font-bold text-white">₹249</span>
-                <span className="text-gray-400">/month</span>
+                <span className="text-5xl font-bold text-white">₹{isAnnual ? '2490' : '249'}</span>
+                <span className="text-gray-400">/{isAnnual ? 'year' : 'month'}</span>
               </div>
               <Button
                 className="w-full bg-purple-700 hover:bg-purple-600 text-white"
-                onClick={() => handlePayment('growth')}
+                onClick={() => handlePayment(isAnnual ? 'growth_annual' : 'growth')}
                 data-testid="growth-plan-btn"
               >
                 Get Growth
