@@ -6,7 +6,9 @@ import { ArrowLeft, User, Crown, Mail, Code, Copy, CheckCircle2 } from 'lucide-r
 import axios from 'axios';
 import { toast } from 'sonner';
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`;
+const BACKEND_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const API_URL = `${BACKEND_BASE}/api`;
+const V1_URL = `${BACKEND_BASE}/v1`;
 
 const SettingsPage = () => {
   const navigate = useNavigate();
@@ -28,7 +30,7 @@ const SettingsPage = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const res = await axios.get(`${API_URL}/settings/api-key-status`, {
+        const res = await axios.get(`${V1_URL}/settings/api-key-status`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setApiStatus(res.data);
@@ -47,14 +49,19 @@ const SettingsPage = () => {
     setLoadingKey(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_URL}/settings/generate-key`, {}, {
+      const targetUrl = `${V1_URL}/settings/generate-key`;
+      console.log(`Generating API key at: ${targetUrl}`);
+
+      const res = await axios.post(targetUrl, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNewKey(res.data.api_key);
       setApiStatus({ has_key: true, created_at: new Date().toISOString() });
       toast.success("API key successfully generated!");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to generate key");
+      console.error("API Key Gen Error:", err);
+      const detail = err.response?.data?.detail || err.message || "Failed to generate key";
+      toast.error(detail);
     } finally {
       setLoadingKey(false);
     }

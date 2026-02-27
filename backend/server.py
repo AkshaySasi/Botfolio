@@ -3,6 +3,7 @@ import sys
 import re
 import io
 import logging
+import secrets
 import asyncio
 import tempfile
 
@@ -134,8 +135,10 @@ async def health_check():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # =============================================
+# V1 SETTINGS API (GROWTH TIER)
+# =============================================
 
-@app.get("/api/settings/api-key-status")
+@app.get("/v1/settings/api-key-status")
 async def get_api_key_status(current_user: User = Depends(get_current_user)):
     try:
         # User needs growth plan
@@ -154,7 +157,7 @@ async def get_api_key_status(current_user: User = Depends(get_current_user)):
         logger.error(f"Error checking API key status: {e}")
         return {"has_key": False}
 
-@app.post("/api/settings/generate-key")
+@app.post("/v1/settings/generate-key")
 @limiter.limit("5/minute")
 async def generate_api_key(request: Request, current_user: User = Depends(get_current_user)):
     if current_user.subscription_tier != "growth":
