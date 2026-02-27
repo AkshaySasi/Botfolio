@@ -1,17 +1,70 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, User, Crown, Mail } from 'lucide-react';
+import { ArrowLeft, User, Crown, Mail, Code, Copy, CheckCircle2 } from 'lucide-react';
+import axios from 'axios';
+import { toast } from 'sonner';
+
+const API_URL = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api`;
 
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const getTierBadgeColor = (tier) => {
-    if (tier === 'pro') return 'from-emerald-500 to-lime-500';
-    if (tier === 'enterprise') return 'from-purple-500 to-pink-500';
+    if (tier === 'creator') return 'from-emerald-500 to-lime-500';
+    if (tier === 'growth') return 'from-purple-500 to-pink-500';
     return 'from-gray-500 to-gray-600';
+  };
+
+  const [apiStatus, setApiStatus] = useState({ has_key: false, created_at: null });
+  const [newKey, setNewKey] = useState(null);
+  const [loadingKey, setLoadingKey] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const fetchApiStatus = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const res = await axios.get(`${API_URL}/settings/api-key-status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setApiStatus(res.data);
+      } catch (err) {
+        console.error("Failed to fetch API key status", err);
+      }
+    };
+    if (user && user.subscription_tier === 'growth') {
+      fetchApiStatus();
+    }
+  }, [user]);
+
+  const generateApiKey = async () => {
+    if (!window.confirm("Are you sure you want to generate a new API key? This will immediately invalidate your existing key (if any).")) return;
+
+    setLoadingKey(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_URL}/settings/generate-key`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNewKey(res.data.api_key);
+      setApiStatus({ has_key: true, created_at: new Date().toISOString() });
+      toast.success("API key successfully generated!");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to generate key");
+    } finally {
+      setLoadingKey(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(newKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("API key copied to clipboard");
   };
 
   return (
@@ -70,8 +123,8 @@ const SettingsPage = () => {
               </div>
               <p className="text-gray-400 text-sm mt-2">
                 {user?.subscription_tier === 'free' && 'Limited to 1 portfolio'}
-                {user?.subscription_tier === 'pro' && 'Up to 5 portfolios'}
-                {user?.subscription_tier === 'enterprise' && 'Unlimited portfolios'}
+                {user?.subscription_tier === 'creator' && 'Limited to 1 portfolio with extra benefits'}
+                {user?.subscription_tier === 'growth' && 'Up to 3 portfolios & API Access'}
               </p>
             </div>
             {user?.subscription_tier === 'free' && (
@@ -88,11 +141,116 @@ const SettingsPage = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-white">
-                {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'pro' ? '5' : '∞'}
+                {user?.subscription_tier === 'free' ? '1' : user?.subscription_tier === 'creator' ? '1' : '3'}
               </div>
               <div className="text-sm text-gray-400">Portfolio Limit</div>
             </div>
           </div>
+        </div>
+
+        {/* Developer API Section */}
+        <div className="bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20 rounded-2xl p-8 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Code className="w-6 h-6 text-blue-400" />
+              Developer API Access
+            </h2>
+            {user?.subscription_tier === 'growth' && (
+              <span className="px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500 text-blue-400 text-sm font-semibold">Active</span>
+            )}
+          </div>
+
+          <p className="text-gray-400 mb-6">Integrate your Botfolio AI directly into your own applications, websites, and portfolios using the developer API.</p>
+
+          {user?.subscription_tier !== 'growth' ? (
+            <div className="relative overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 p-6 backdrop-blur-sm">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center z-10 transition-all">
+                <Crown className="w-8 h-8 text-purple-400 mb-3" />
+                <h3 className="text-xl font-bold text-white mb-2">Growth Plan Required</h3>
+                <p className="text-gray-300 text-sm mb-4">Upgrade to generate developer API keys.</p>
+                <Button onClick={() => navigate('/pricing')} className="bg-purple-600 hover:bg-purple-700">
+                  View Plans
+                </Button>
+              </div>
+              {/* Blurred mockup background */}
+              <div className="opacity-30 blur-sm pointer-events-none">
+                <div className="flex gap-4">
+                  <div className="h-10 w-full bg-gray-800 rounded-lg flex items-center px-4 font-mono text-gray-500">sk_live_...</div>
+                  <Button disabled className="w-32">Generate Key</Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {newKey ? (
+                <div className="p-4 border border-emerald-500/30 bg-emerald-500/10 rounded-xl relative">
+                  <h3 className="text-emerald-400 font-bold mb-2 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" /> Key Generated Successfully
+                  </h3>
+                  <p className="text-sm text-gray-300 mb-4">Please copy this key now. For your security, it will never be displayed again.</p>
+                  <div className="flex items-center gap-2">
+                    <code className="bg-black border border-gray-700 px-4 py-3 rounded-lg flex-1 text-emerald-300 font-mono tracking-wider break-all">
+                      {newKey}
+                    </code>
+                    <Button
+                      onClick={handleCopy}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 px-6 h-[48px]"
+                    >
+                      {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#111] border border-gray-800 rounded-xl p-6 flex flex-col items-start gap-4">
+                  {apiStatus.has_key ? (
+                    <>
+                      <div className="flex items-center gap-3 text-emerald-400 font-semibold mb-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                        You have an active API key
+                      </div>
+                      <p className="text-sm text-gray-400 mb-2">Created on {new Date(apiStatus.created_at).toLocaleDateString()}</p>
+                      <Button
+                        onClick={generateApiKey}
+                        disabled={loadingKey}
+                        className="bg-gray-800 hover:bg-red-900/40 hover:text-red-400 hover:border-red-500/50 border border-gray-700 transition-all text-sm"
+                      >
+                        {loadingKey ? 'Generating...' : 'Roll/Regenerate API Key'}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-white font-bold mb-1">No API Key Configured</h3>
+                      <p className="text-sm text-gray-400 mb-4">Generate your first token to authenticate API requests to the Botfolio AI system.</p>
+                      <Button
+                        onClick={generateApiKey}
+                        disabled={loadingKey}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {loadingKey ? 'Generating...' : 'Generate API Key'}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="p-5 bg-black border border-gray-800 rounded-xl">
+                <h4 className="text-sm text-gray-400 font-bold mb-3 uppercase tracking-wider">Example Usage</h4>
+                <pre className="text-xs text-gray-300 overflow-x-auto">
+                  {`const response = await fetch('https://api.mybotfolio.com/v1/chat/your-bot-url', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': 'sk_live_your_secret_key'
+  },
+  body: JSON.stringify({ 
+    message: "Tell me about your experience with React",
+    visitor_name: "Recruiter" 
+  })
+});`}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Danger Zone */}

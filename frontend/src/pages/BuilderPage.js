@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Upload, Sparkles, ArrowLeft, CheckCircle, FileText, File, Shield, Info } from 'lucide-react';
+import { Upload, Sparkles, ArrowLeft, CheckCircle, FileText, File, Shield, Info, Lock } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -275,12 +275,21 @@ const BuilderPage = () => {
                   <button
                     key={tone.id}
                     type="button"
-                    onClick={() => setFormData(p => ({ ...p, tone: tone.id }))}
-                    className={`p-3 rounded-xl border transition-all text-left ${formData.tone === tone.id
+                    onClick={() => {
+                      if (user?.subscription_tier === 'free' && tone.id !== 'professional') {
+                        toast.error('Custom tones require the Creator plan or higher');
+                        return;
+                      }
+                      setFormData(p => ({ ...p, tone: tone.id }));
+                    }}
+                    className={`p-3 rounded-xl border transition-all text-left relative ${formData.tone === tone.id
                       ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
                       : 'border-white/10 bg-black/30 hover:border-white/20'
-                      }`}
+                      } ${user?.subscription_tier === 'free' && tone.id !== 'professional' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
+                    {user?.subscription_tier === 'free' && tone.id !== 'professional' && (
+                      <Lock className="w-3 h-3 text-gray-400 absolute top-2 right-2" />
+                    )}
                     <div className={`text-xs font-bold mb-0.5 ${formData.tone === tone.id ? 'text-emerald-400' : 'text-gray-300'}`}>
                       {tone.label}
                     </div>

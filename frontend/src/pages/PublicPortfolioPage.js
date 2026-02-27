@@ -302,22 +302,24 @@ const PublicPortfolioPage = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-emerald-500/20 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="text-gray-500 text-sm">Powered by</span>
-            <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-6 h-6" />
-            <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
+      {/* Footer - Watermark explicitly shown ONLY for Free Tier */}
+      {portfolio.owner_tier === 'free' && (
+        <footer className="border-t border-emerald-500/20 py-6 mt-12">
+          <div className="max-w-7xl mx-auto px-6 text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="text-gray-500 text-sm">Powered by</span>
+              <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-6 h-6" />
+              <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
+            </div>
+            <p className="text-gray-500 text-xs">
+              Create your own AI portfolio chatbot &nbsp;·&nbsp;
+              <Link to="/privacy" className="hover:text-emerald-400">Privacy</Link>
+              &nbsp;·&nbsp;
+              <Link to="/terms" className="hover:text-emerald-400">Terms</Link>
+            </p>
           </div>
-          <p className="text-gray-500 text-xs">
-            Create your own AI portfolio chatbot &nbsp;·&nbsp;
-            <Link to="/privacy" className="hover:text-emerald-400">Privacy</Link>
-            &nbsp;·&nbsp;
-            <Link to="/terms" className="hover:text-emerald-400">Terms</Link>
-          </p>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* ─── Free Tier Request Limit Popup ─── */}
       {showLimitModal && (
@@ -332,8 +334,8 @@ const PublicPortfolioPage = () => {
               </div>
               <h3 className="text-xl font-bold text-white mb-2">Request Limit Reached</h3>
               <p className="text-gray-400 text-sm">
-                This portfolio has reached its <strong className="text-white">5 free daily requests</strong>.
-                Upgrade the account to unlock unlimited AI conversations.
+                This portfolio has reached its <strong className="text-white">monthly AI interaction limit</strong>.
+                The owner must upgrade their account to unlock more conversations.
               </p>
             </div>
             <div className="space-y-3">

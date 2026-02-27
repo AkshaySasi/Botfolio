@@ -19,10 +19,10 @@ try:
     import razorpay
     from datetime import datetime, timezone, timedelta
     from pathlib import Path
-    from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status, Request, BackgroundTasks
+    from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status, Request, BackgroundTasks, Security
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.middleware.gzip import GZipMiddleware
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
     from pydantic import BaseModel, Field, ConfigDict, EmailStr
     from typing import List, Optional
     from supabase_client import supabase, supabase_admin
@@ -134,6 +134,71 @@ async def health_check():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # =============================================
+
+@app.get("/api/settings/api-key-status")
+async def get_api_key_status(current_user: User = Depends(get_current_user)):
+    try:
+        # User needs growth plan
+        if current_user.subscription_tier != "growth":
+            return {"has_key": False}
+
+        user_data = supabase.table("users").select("api_key_created_at").eq("id", current_user.id).single().execute()
+        
+        has_key = user_data.data and user_data.data.get("api_key_created_at") is not None
+        
+        return {
+            "has_key": has_key,
+            "created_at": user_data.data.get("api_key_created_at") if has_key else None
+        }
+    except Exception as e:
+        logger.error(f"Error checking API key status: {e}")
+        return {"has_key": False}
+
+@app.post("/api/settings/generate-key")
+@limiter.limit("5/minute")
+async def generate_api_key(request: Request, current_user: User = Depends(get_current_user)):
+    if current_user.subscription_tier != "growth":
+        raise HTTPException(status_code=403, detail="API Key generation requires the Growth plan.")
+
+    new_key = generate_secure_api_key()
+    
+    try:
+        # Update user record with new api key directly.
+        # Ensure 'api_key' and 'api_key_created_at' columns exist in 'users' table!
+        supabase.table("users").update({
+            "api_key": new_key,
+            "api_key_created_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", current_user.id).execute()
+        
+        # We only return it once!
+        return {"api_key": new_key, "message": "Key generated successfully. Store it safely, it will not be shown again."}
+    except Exception as e:
+        logger.error(f"Failed to generate API Key: {e}")
+        raise HTTPException(status_code=500, detail="Database column `api_key` may not exist yet, or another error occurred.")
+
+# =============================================
+# V1 DATA API (GROWTH TIER)
+# =============================================
+
+@app.post("/v1/chat/{custom_url}", response_model=ChatResponse)
+@limiter.limit("60/minute")
+async def api_chat_with_portfolio(request: Request, custom_url: str, chat: ChatMessage, api_user: User = Depends(verify_api_key)):
+    """API Endpoint for programmatic Chat interactions (Growth users only)."""
+    resp = supabase.table("portfolios").select("*").eq("custom_url", custom_url).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    portfolio = resp.data[0]
+    
+    if portfolio['user_id'] != api_user.id:
+        raise HTTPException(status_code=403, detail="You do not own this portfolio.")
+
+    if not portfolio.get('is_active'):
+        raise HTTPException(status_code=404, detail="Portfolio not found or inactive")
+        
+    return await process_chat_request(api_user, portfolio, chat)
+
+
+# =============================================
 # MODELS
 
 # =============================================
@@ -207,11 +272,18 @@ class PortfolioPublic(BaseModel):
     name: str
     custom_url: str
     owner_name: str
+    owner_tier: str
     is_active: bool
 
 # =============================================
 # HELPERS
 # =============================================
+import secrets
+
+api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+
+def generate_secure_api_key():
+    return f"sk_{secrets.token_urlsafe(32)}"
 
 CUSTOM_URL_PATTERN = re.compile(r'^[a-z0-9][a-z0-9\-]{1,48}[a-z0-9]$')
 
@@ -277,6 +349,25 @@ async def get_current_user(payload: dict = Depends(verify_token)):
     except Exception as e:
         logger.error(f"Auth Error: {e}")
         raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API Key header 'x-api-key' is missing")
+    
+    try:
+        # Check if any user has this precise API key
+        response = supabase.table("users").select("*").eq("api_key", api_key).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=401, detail="Invalid API Key")
+            
+        user = User(**response.data)
+        if user.subscription_tier != "growth":
+            raise HTTPException(status_code=403, detail="API Access requires Growth plan")
+            
+        return user
+    except Exception as e:
+        logger.error(f"API Key validation error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid API Key")
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -397,6 +488,9 @@ async def create_portfolio(
     tone: str = Form("professional"),
     context_aware: bool = Form(True)
 ):
+    # Enforce tone limit
+    if current_user.subscription_tier == "free" and tone != "professional":
+        tone = "professional"
     # Check portfolio limit
     tier = current_user.subscription_tier or "free"
     portfolio_limits = {"free": 1, "creator": 1, "growth": 3, "enterprise": 9999}
@@ -540,6 +634,9 @@ async def update_portfolio(
         update_data['is_active'] = is_active
     
     if tone is not None or context_aware is not None:
+        if current_user.subscription_tier == "free" and tone is not None and tone != "professional":
+            raise HTTPException(status_code=403, detail="Custom tones require the Creator plan or higher")
+
         # chatbot_config is a JSONB column
         current_config = response.data.get("chatbot_config", {}) or {}
         if tone is not None: current_config["tone"] = tone
@@ -666,34 +763,21 @@ async def get_public_portfolio(custom_url: str):
     if not portfolio or not portfolio.get('is_active'):
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
-    user_resp = supabase.table("users").select("name").eq("id", portfolio['user_id']).single().execute()
+    user_resp = supabase.table("users").select("name, subscription_tier").eq("id", portfolio['user_id']).single().execute()
     owner_name = user_resp.data.get('name', 'Portfolio Owner') if user_resp.data else 'Portfolio Owner'
+    owner_tier = user_resp.data.get('subscription_tier', 'free') if user_resp.data else 'free'
 
     return PortfolioPublic(
         name=portfolio['name'],
         custom_url=portfolio['custom_url'],
         owner_name=owner_name,
+        owner_tier=owner_tier,
         is_active=portfolio['is_active']
     )
 
 
-@app.post("/api/chat/{custom_url}", response_model=ChatResponse)
-@limiter.limit("10/minute")
-async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Request):
-    resp = supabase.table("portfolios").select("*").eq("custom_url", custom_url).execute()
-    if not resp.data:
-        raise HTTPException(status_code=404, detail="Portfolio not found")
-    portfolio = resp.data[0]
-    if not portfolio.get('is_active'):
-        raise HTTPException(status_code=404, detail="Portfolio not found or inactive")
-    if not portfolio.get('is_processed'):
-        raise HTTPException(status_code=503, detail="Portfolio chatbot is still being trained. Please try again shortly.")
-
-    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).execute()
-    if not user_resp.data:
-        raise HTTPException(status_code=404, detail="Portfolio owner not found")
-    user = user_resp.data[0]
-
+async def process_chat_request(user_obj, portfolio: dict, chat: ChatMessage) -> ChatResponse:
+    user = user_obj if isinstance(user_obj, dict) else user_obj.model_dump(mode='json')
     now = datetime.now(timezone.utc)
 
     # Reset monthly count if new month
@@ -797,6 +881,24 @@ async def chat_with_portfolio(custom_url: str, chat: ChatMessage, request: Reque
         if "permission" in err:
             raise HTTPException(status_code=403, detail="AI engine access denied. Please contact support.")
         raise HTTPException(status_code=500, detail="The AI server is experiencing heavy load. Please try again later.")
+
+@app.post("/api/chat/{custom_url}", response_model=ChatResponse)
+@limiter.limit("10/minute")
+async def chat_with_portfolio(request: Request, custom_url: str, chat: ChatMessage):
+    resp = supabase.table("portfolios").select("*").eq("custom_url", custom_url).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    portfolio = resp.data[0]
+    if not portfolio.get('is_active'):
+        raise HTTPException(status_code=404, detail="Portfolio not found or inactive")
+    if not portfolio.get('is_processed'):
+        raise HTTPException(status_code=503, detail="Portfolio chatbot is still being trained. Please try again shortly.")
+
+    user_resp = supabase.table("users").select("*").eq("id", portfolio['user_id']).execute()
+    if not user_resp.data:
+        raise HTTPException(status_code=404, detail="Portfolio owner not found")
+    
+    return await process_chat_request(user_resp.data[0], portfolio, chat)
 
 # =============================================
 # PAYMENT ENDPOINTS (RAZORPAY)

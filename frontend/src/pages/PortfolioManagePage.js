@@ -9,7 +9,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Upload, BarChart, RefreshCw, FileText,
-  MessageSquare, Eye, Edit3, Save, Globe, Check, Shield, Info
+  MessageSquare, Eye, Edit3, Save, Globe, Check, Shield, Info, Lock
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -249,12 +249,21 @@ const PortfolioManagePage = () => {
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => { setEditTone(t.id); setEditDirty(true); }}
-                        className={`p-2 rounded-lg border text-center transition-all ${editTone === t.id
+                        onClick={() => {
+                          if (user?.subscription_tier === 'free' && t.id !== 'professional') {
+                            toast.error('Custom tones require the Creator plan or higher');
+                            return;
+                          }
+                          setEditTone(t.id); setEditDirty(true);
+                        }}
+                        className={`p-2 rounded-lg border text-center transition-all relative ${editTone === t.id
                           ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
                           : 'border-white/10 bg-black/30 text-gray-400 hover:border-white/20'
-                          }`}
+                          } ${user?.subscription_tier === 'free' && t.id !== 'professional' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
+                        {user?.subscription_tier === 'free' && t.id !== 'professional' && (
+                          <Lock className="w-3 h-3 text-gray-500 absolute top-1 right-1" />
+                        )}
                         <div className="text-[10px] font-bold">{t.label}</div>
                       </button>
                     ))}
