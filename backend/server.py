@@ -21,6 +21,7 @@ try:
     from pathlib import Path
     from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status, Request, BackgroundTasks
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     from pydantic import BaseModel, Field, ConfigDict, EmailStr
     from typing import List, Optional
@@ -78,13 +79,21 @@ logger.info("Server is starting up...")
 STORAGE_FILES_BUCKET = "portfolio-files"
 STORAGE_INDEXES_BUCKET = "portfolio-indexes"
 
+# Rate Limiting Setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# GZip Compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=os.environ.get(
         'CORS_ORIGINS',
-        'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://mybotfolio.vercel.app'
+        'https://mybotfolio.vercel.app,http://localhost:3000'
     ).split(','),
     allow_methods=["*"],
     allow_headers=["*"],
@@ -285,7 +294,8 @@ async def check_admin(current_user: User = Depends(get_current_user)):
 # =============================================
 
 @app.post("/api/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
+@limiter.limit("5/minute")
+async def register(request: Request, user_data: UserCreate):
     existing = supabase.table("users").select("email").eq("email", user_data.email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -304,7 +314,8 @@ async def register(user_data: UserCreate):
     return TokenResponse(access_token=token, user=user.model_dump(mode='json'))
 
 @app.post("/api/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+@limiter.limit("10/minute")
+async def login(request: Request, credentials: UserLogin):
     response = supabase.table("users").select("*").eq("email", credentials.email).execute()
     user = response.data[0] if response.data else None
 

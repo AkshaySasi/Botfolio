@@ -23,7 +23,7 @@ const SettingsPage = () => {
             <span>Back to Dashboard</span>
           </Link>
           <div className="flex items-center gap-2">
-            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-10 h-10" />
+            <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-10 h-10" />
             <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
         </div>

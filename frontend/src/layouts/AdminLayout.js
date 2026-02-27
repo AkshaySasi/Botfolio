@@ -62,7 +62,7 @@ const AdminLayout = () => {
                 <div className="p-5 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                         <img
-                            src="/assets/botfolio-logo-transparent.png"
+                            src="/assets/botfolio-logo-bg.png"
                             alt="Botfolio"
                             className="w-9 h-9 object-contain"
                         />

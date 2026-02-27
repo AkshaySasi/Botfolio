@@ -191,7 +191,7 @@ const PublicPortfolioPage = () => {
       <header className="border-b border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-black to-transparent">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-16 h-16" />
+            <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-16 h-16" />
           </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {portfolio.owner_name}'s
@@ -307,7 +307,7 @@ const PublicPortfolioPage = () => {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-gray-500 text-sm">Powered by</span>
-            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-6 h-6" />
+            <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-6 h-6" />
             <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
           </div>
           <p className="text-gray-500 text-xs">

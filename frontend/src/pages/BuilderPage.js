@@ -154,7 +154,7 @@ const BuilderPage = () => {
           </Link>
           <div className="flex items-center gap-2">
             <img
-              src="/assets/botfolio-logo-transparent.png"
+              src="/assets/botfolio-logo-bg.png"
               alt="Botfolio"
               className="w-10 h-10"
               style={{ animation: loading ? 'spin 2s linear infinite' : 'none' }}

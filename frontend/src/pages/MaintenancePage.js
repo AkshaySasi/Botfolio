@@ -9,7 +9,7 @@ const MaintenancePage = () => (
         <div className="relative z-10 max-w-md mx-auto">
             {/* Logo */}
             <div className="flex items-center justify-center gap-3 mb-10">
-                <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-12 h-12" />
+                <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-12 h-12" />
                 <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent"
                     style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
             </div>

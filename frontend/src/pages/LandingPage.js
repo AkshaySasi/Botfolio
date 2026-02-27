@@ -464,7 +464,7 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-8 h-8" />
+              <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-8 h-8" />
               <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Botfolio</span>
             </div>
             <p className="text-gray-500 text-sm" style={{ fontFamily: 'Inter, sans-serif' }}>

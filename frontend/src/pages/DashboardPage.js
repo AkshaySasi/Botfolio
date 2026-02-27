@@ -65,7 +65,7 @@ const DashboardPage = () => {
         {!user && (
           <div className="text-center py-20">
             <div className="block mx-auto w-32 h-32 mb-8 opacity-90">
-              <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-full h-full object-contain" />
+              <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-6" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Start Your <span className="bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent">AI Journey</span>
@@ -202,7 +202,7 @@ const DashboardPage = () => {
             ) : portfolios.length === 0 ? (
               <div className="text-center py-16">
                 <div className="block mx-auto w-24 h-24 mb-6 opacity-80">
-                  <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-full h-full object-contain" />
+                  <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-full h-full object-contain" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-400 mb-2">No chatbots yet</h3>
                 <p className="text-gray-500 mb-6">Create your first AI-powered chatbot</p>
@@ -226,7 +226,7 @@ const DashboardPage = () => {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 to-lime-500 flex items-center justify-center p-2">
-                          <img src="/assets/botfolio-logo-transparent.png" alt="Bot" className="w-full h-full object-contain brightness-0 invert" />
+                          <img src="/assets/botfolio-logo-bg.png" alt="Bot" className="w-full h-full object-contain brightness-0 invert" />
                         </div>
                         <div>
                           <h3 className="text-lg font-bold text-white">{portfolio.name}</h3>

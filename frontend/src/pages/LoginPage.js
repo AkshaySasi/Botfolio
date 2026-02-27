@@ -46,7 +46,7 @@ const LoginPage = () => {
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-3 mb-6 group">
             <img
-              src="/assets/botfolio-logo-transparent.png"
+              src="/assets/botfolio-logo-bg.png"
               alt="Botfolio"
               className="w-11 h-11 group-hover:scale-110 transition-transform"
             />

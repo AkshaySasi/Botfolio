@@ -86,7 +86,7 @@ const Navbar = () => {
                     {/* Logo */}
                     <Link to="/" className="flex items-center gap-2 flex-shrink-0 group">
                         <img
-                            src="/assets/botfolio-logo-transparent.png"
+                            src="/assets/botfolio-logo-bg.png"
                             alt="Botfolio"
                             className="w-8 h-8 sm:w-9 sm:h-9 object-contain group-hover:scale-110 transition-transform"
                         />
@@ -247,7 +247,7 @@ const Navbar = () => {
                     {/* Drawer Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-500/15">
                         <div className="flex items-center gap-2">
-                            <img src="/assets/botfolio-logo-transparent.png" alt="Botfolio" className="w-8 h-8" />
+                            <img src="/assets/botfolio-logo-bg.png" alt="Botfolio" className="w-8 h-8" />
                             <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-lime-400 bg-clip-text text-transparent" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                                 Botfolio
                             </span>
