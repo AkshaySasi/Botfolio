@@ -123,9 +123,186 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
             pass  # If settings table doesn't exist yet, skip
         return await call_next(request)
 
-app.add_middleware(MaintenanceMiddleware)
+# =============================================
+# MODELS
+# =============================================
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: EmailStr
+    name: str
+    auth_provider: str = "email"
+    google_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    subscription_tier: str = "free"
+    portfolios_count: int = 0
+    is_admin: bool = False
+    subscription_expiry: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30)
+    )
+    daily_queries_count: int = 0
+    bonus_credits: int = 0
+    last_query_date: Optional[datetime] = None
+    api_key: Optional[str] = None
+    api_key_created_at: Optional[datetime] = None
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    is_admin: Optional[bool] = None
+    subscription_tier: Optional[str] = None
+    subscription_expiry: Optional[datetime] = None
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class GoogleAuthRequest(BaseModel):
+    credential: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+class Portfolio(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    custom_url: str
+    resume_url: Optional[str] = None    # Supabase Storage public URL
+    details_url: Optional[str] = None  # Supabase Storage public URL
+    text_content: Optional[str] = None
+    is_active: bool = True
+    is_processed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    analytics: dict = Field(default_factory=dict)
+    chatbot_config: dict = Field(default_factory=dict)
+    custom_domain: Optional[str] = None
+
+class ChatMessage(BaseModel):
+    portfolio_url: str
+    message: str
+    visitor_name: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+
+class PortfolioPublic(BaseModel):
+    name: str
+    custom_url: str
+    owner_name: str
+    owner_tier: str
+    is_active: bool
 
 # =============================================
+# HELPERS & AUTH UTILITIES
+# =============================================
+
+api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+
+def generate_secure_api_key():
+    return f"sk_{secrets.token_urlsafe(32)}"
+
+CUSTOM_URL_PATTERN = re.compile(r'^[a-z0-9][a-z0-9\-]{1,48}[a-z0-9]$')
+
+def validate_custom_url(custom_url: str) -> str:
+    """Validate and sanitize custom URL slug."""
+    url = custom_url.lower().strip()
+    url = re.sub(r'[^a-z0-9\-]', '-', url)  # replace invalid chars with dash
+    url = re.sub(r'-+', '-', url)            # collapse multiple dashes
+    url = url.strip('-')
+    if not CUSTOM_URL_PATTERN.match(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Custom URL must be 3-50 characters, lowercase letters, numbers, and hyphens only."
+        )
+    return url
+
+def upload_file_to_storage(file_bytes: bytes, path: str, content_type: str = "application/octet-stream") -> str:
+    """Upload a file to Supabase Storage and return public URL. Uses service_role client."""
+    try:
+        supabase_admin.storage.from_(STORAGE_FILES_BUCKET).upload(
+            path, file_bytes, {"content-type": content_type, "upsert": "true"}
+        )
+        result = supabase_admin.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
+        return result
+    except Exception as e:
+        err_str = str(e)
+        logger.error(f"Storage upload error for {path}: {err_str}")
+        if "Bucket not found" in err_str or "does not exist" in err_str.lower():
+            raise HTTPException(
+                status_code=500,
+                detail="Storage bucket 'portfolio-files' not found. Create it in Supabase Dashboard → Storage → New Bucket (Public: ON)."
+            )
+        if "Unauthorized" in err_str or "403" in err_str:
+            raise HTTPException(status_code=500, detail="Storage permission denied. Make sure SUPABASE_SERVICE_KEY is set in Render environment variables.")
+        raise HTTPException(status_code=500, detail=f"File upload failed: {err_str[:200]}")
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user(payload: dict = Depends(verify_token)):
+    try:
+        response = supabase.table("users").select("*").eq("id", payload.get("user_id")).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        return User(**response.data)
+    except Exception as e:
+        logger.error(f"Auth Error: {e}")
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API Key header 'x-api-key' is missing")
+    
+    try:
+        # Check if any user has this precise API key
+        response = supabase.table("users").select("*").eq("api_key", api_key).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=401, detail="Invalid API Key")
+            
+        user = User(**response.data)
+        if user.subscription_tier != "growth":
+            raise HTTPException(status_code=403, detail="API Access requires Growth plan")
+            
+        return user
+    except Exception as e:
+        logger.error(f"API Key validation error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+async def check_admin(current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
+
+# =============================================
+
 # HEALTH CHECK — keeps Render warm
 # =============================================
 
@@ -199,190 +376,6 @@ async def api_chat_with_portfolio(request: Request, custom_url: str, chat: ChatM
         raise HTTPException(status_code=404, detail="Portfolio not found or inactive")
         
     return await process_chat_request(api_user, portfolio, chat)
-
-
-# =============================================
-# MODELS
-
-# =============================================
-
-class User(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    email: EmailStr
-    name: str
-    auth_provider: str = "email"
-    google_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    subscription_tier: str = "free"
-    portfolios_count: int = 0
-    is_admin: bool = False
-    subscription_expiry: Optional[datetime] = Field(
-        default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=30)
-    )
-    daily_queries_count: int = 0
-    bonus_credits: int = 0
-    last_query_date: Optional[datetime] = None
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    is_admin: Optional[bool] = None
-    subscription_tier: Optional[str] = None
-    subscription_expiry: Optional[datetime] = None
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    name: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class GoogleAuthRequest(BaseModel):
-    credential: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: dict
-
-class Portfolio(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    name: str
-    custom_url: str
-    resume_url: Optional[str] = None    # Supabase Storage public URL
-    details_url: Optional[str] = None  # Supabase Storage public URL
-    text_content: Optional[str] = None
-    is_active: bool = True
-    is_processed: bool = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    analytics: dict = Field(default_factory=dict)
-    chatbot_config: dict = Field(default_factory=dict)
-    custom_domain: Optional[str] = None
-
-class ChatMessage(BaseModel):
-    portfolio_url: str
-    message: str
-    visitor_name: Optional[str] = None
-
-class ChatResponse(BaseModel):
-    response: str
-
-class PortfolioPublic(BaseModel):
-    name: str
-    custom_url: str
-    owner_name: str
-    owner_tier: str
-    is_active: bool
-
-# =============================================
-# HELPERS
-# =============================================
-import secrets
-
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
-
-def generate_secure_api_key():
-    return f"sk_{secrets.token_urlsafe(32)}"
-
-CUSTOM_URL_PATTERN = re.compile(r'^[a-z0-9][a-z0-9\-]{1,48}[a-z0-9]$')
-
-def validate_custom_url(custom_url: str) -> str:
-    """Validate and sanitize custom URL slug."""
-    url = custom_url.lower().strip()
-    url = re.sub(r'[^a-z0-9\-]', '-', url)  # replace invalid chars with dash
-    url = re.sub(r'-+', '-', url)            # collapse multiple dashes
-    url = url.strip('-')
-    if not CUSTOM_URL_PATTERN.match(url):
-        raise HTTPException(
-            status_code=400,
-            detail="Custom URL must be 3-50 characters, lowercase letters, numbers, and hyphens only."
-        )
-    return url
-
-def upload_file_to_storage(file_bytes: bytes, path: str, content_type: str = "application/octet-stream") -> str:
-    """Upload a file to Supabase Storage and return public URL. Uses service_role client."""
-    try:
-        supabase_admin.storage.from_(STORAGE_FILES_BUCKET).upload(
-            path, file_bytes, {"content-type": content_type, "upsert": "true"}
-        )
-        result = supabase_admin.storage.from_(STORAGE_FILES_BUCKET).get_public_url(path)
-        return result
-    except Exception as e:
-        err_str = str(e)
-        logger.error(f"Storage upload error for {path}: {err_str}")
-        if "Bucket not found" in err_str or "does not exist" in err_str.lower():
-            raise HTTPException(
-                status_code=500,
-                detail="Storage bucket 'portfolio-files' not found. Create it in Supabase Dashboard → Storage → New Bucket (Public: ON)."
-            )
-        if "Unauthorized" in err_str or "403" in err_str:
-            raise HTTPException(status_code=500, detail="Storage permission denied. Make sure SUPABASE_SERVICE_KEY is set in Render environment variables.")
-        raise HTTPException(status_code=500, detail=f"File upload failed: {err_str[:200]}")
-
-# =============================================
-# AUTH UTILITIES
-# =============================================
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-async def get_current_user(payload: dict = Depends(verify_token)):
-    try:
-        response = supabase.table("users").select("*").eq("id", payload.get("user_id")).single().execute()
-        if not response.data:
-            raise HTTPException(status_code=404, detail="User not found")
-        return User(**response.data)
-    except Exception as e:
-        logger.error(f"Auth Error: {e}")
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-async def verify_api_key(api_key: str = Security(api_key_header)):
-    if not api_key:
-        raise HTTPException(status_code=401, detail="API Key header 'x-api-key' is missing")
-    
-    try:
-        # Check if any user has this precise API key
-        response = supabase.table("users").select("*").eq("api_key", api_key).single().execute()
-        if not response.data:
-            raise HTTPException(status_code=401, detail="Invalid API Key")
-            
-        user = User(**response.data)
-        if user.subscription_tier != "growth":
-            raise HTTPException(status_code=403, detail="API Access requires Growth plan")
-            
-        return user
-    except Exception as e:
-        logger.error(f"API Key validation error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-
-async def check_admin(current_user: User = Depends(get_current_user)):
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin privileges required")
-    return current_user
-
 # =============================================
 # AUTH ENDPOINTS
 # =============================================
