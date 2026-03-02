@@ -952,34 +952,82 @@ async def verify_payment(data: PaymentVerification, current_user: User = Depends
             'razorpay_signature': data.razorpay_signature
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
-        
+
+        amount_paid = PLAN_PRICES.get(data.plan_id, 0)
+
         if data.plan_id.startswith("credits_"):
             # Handle credit purchase
             amount_credits = int(data.plan_id.split("_")[1])
-            # Fetch current bonus_credits (or use current_user if updated)
-            # Fetching fresh to be safe
             user_resp = supabase.table("users").select("bonus_credits").eq("id", current_user.id).single().execute()
             current_bonus = user_resp.data.get("bonus_credits", 0) if user_resp.data else 0
-            
             new_bonus = current_bonus + amount_credits
             supabase.table("users").update({
                 "bonus_credits": new_bonus
             }).eq("id", current_user.id).execute()
+
+            # Log payment
+            try:
+                supabase.table("payments").insert({
+                    "id": str(uuid.uuid4()),
+                    "user_id": current_user.id,
+                    "plan_id": data.plan_id,
+                    "amount": amount_paid,
+                    "billing_cycle": "one-time",
+                    "status": "success",
+                    "razorpay_payment_id": data.razorpay_payment_id,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "expires_at": None
+                }).execute()
+            except Exception as log_err:
+                logger.warning(f"Failed to log payment (non-fatal): {log_err}")
+
             return {"status": "success", "type": "credits", "bonus_credits": new_bonus}
         else:
-            # Handle tier upgrade
-            expiry = datetime.now(timezone.utc) + timedelta(days=30)
+            # Handle tier upgrade — strip _annual suffix for DB tier name
+            is_annual = data.plan_id.endswith("_annual")
+            base_tier = data.plan_id.replace("_annual", "") if is_annual else data.plan_id
+            expiry = datetime.now(timezone.utc) + timedelta(days=365 if is_annual else 30)
+
             supabase.table("users").update({
-                "subscription_tier": data.plan_id,
+                "subscription_tier": base_tier,
                 "subscription_expiry": expiry.isoformat(),
                 "daily_queries_count": 0
             }).eq("id", current_user.id).execute()
-            return {"status": "success", "type": "subscription", "tier": data.plan_id}
+
+            # Log payment
+            try:
+                supabase.table("payments").insert({
+                    "id": str(uuid.uuid4()),
+                    "user_id": current_user.id,
+                    "plan_id": base_tier,
+                    "amount": amount_paid,
+                    "billing_cycle": "annual" if is_annual else "monthly",
+                    "status": "success",
+                    "razorpay_payment_id": data.razorpay_payment_id,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "expires_at": expiry.isoformat()
+                }).execute()
+            except Exception as log_err:
+                logger.warning(f"Failed to log payment (non-fatal): {log_err}")
+
+            return {"status": "success", "type": "subscription", "tier": base_tier, "expires_at": expiry.isoformat()}
+
     except razorpay.errors.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Payment verification failed")
     except Exception as e:
         logger.error(f"Payment Confirm Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/payment/history")
+async def get_payment_history(current_user: User = Depends(get_current_user)):
+    """Returns the user's payment history for dashboard display."""
+    try:
+        resp = supabase.table("payments").select("*").eq("user_id", current_user.id).order("created_at", desc=True).limit(10).execute()
+        return resp.data or []
+    except Exception as e:
+        logger.error(f"Payment history error: {e}")
+        return []
+
 
 # =============================================
 # ADMIN ENDPOINTS
