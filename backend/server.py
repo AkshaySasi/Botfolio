@@ -1481,6 +1481,70 @@ async def get_messages(current_user: User = Depends(check_admin)):
 
 
 # =============================================
+# USER NOTIFICATIONS
+# =============================================
+
+class MarkReadRequest(BaseModel):
+    notification_id: Optional[str] = None  # None = mark all
+
+@app.get("/api/notifications")
+async def get_user_notifications(current_user: User = Depends(get_current_user)):
+    """
+    Returns all broadcast notifications, annotated with whether
+    the current user has read each one.
+    """
+    try:
+        # Fetch all notifications (most recent first)
+        notifs_resp = supabase.table("notifications").select("*").order("created_at", desc=True).limit(50).execute()
+        notifs = notifs_resp.data or []
+
+        # Fetch which ones this user has read
+        reads_resp = supabase.table("notification_reads").select("notification_id").eq("user_id", current_user.id).execute()
+        read_ids = {r["notification_id"] for r in (reads_resp.data or [])}
+
+        # Annotate each notification
+        for n in notifs:
+            n["read"] = n["id"] in read_ids
+
+        return notifs
+    except Exception as e:
+        logger.error(f"Notifications fetch error: {e}")
+        return []
+
+@app.post("/api/notifications/mark-read")
+async def mark_notifications_read(body: MarkReadRequest, current_user: User = Depends(get_current_user)):
+    """
+    Marks one (by id) or all notifications as read for the current user.
+    Uses upsert so re-clicking doesn't error.
+    """
+    try:
+        if body.notification_id:
+            # Mark one
+            supabase.table("notification_reads").upsert({
+                "user_id": current_user.id,
+                "notification_id": body.notification_id,
+                "read_at": datetime.now(timezone.utc).isoformat()
+            }, on_conflict="user_id,notification_id").execute()
+        else:
+            # Mark all — fetch all notification ids first
+            all_notifs = supabase.table("notifications").select("id").execute()
+            rows = [
+                {
+                    "user_id": current_user.id,
+                    "notification_id": n["id"],
+                    "read_at": datetime.now(timezone.utc).isoformat()
+                }
+                for n in (all_notifs.data or [])
+            ]
+            if rows:
+                supabase.table("notification_reads").upsert(rows, on_conflict="user_id,notification_id").execute()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Mark-read error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to mark as read")
+
+
+# =============================================
 # MAINTENANCE STATUS (public, for frontend)
 # =============================================
 
