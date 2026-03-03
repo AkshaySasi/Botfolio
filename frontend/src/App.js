@@ -76,12 +76,17 @@ const MaintenanceWrapper = ({ children }) => {
     axios.get(`${API_URL}/api/maintenance-status`).then(r => {
       setMaintenance(r.data.maintenance);
     }).catch(() => { });
+  }, []);
 
-    // If backend isn't ready in 3 seconds, show "Waking up" feedback
-    const timer = setTimeout(() => {
-      if (!backendReady) setShowWakingUp(true);
-    }, 3000);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    if (backendReady) {
+      // Server is up — hide the banner immediately
+      setShowWakingUp(false);
+      return;
+    }
+    // If backend isn't ready within 3s, show "Waking up" feedback
+    const showTimer = setTimeout(() => setShowWakingUp(true), 3000);
+    return () => clearTimeout(showTimer);
   }, [backendReady]);
 
   // Admins bypass maintenance screen

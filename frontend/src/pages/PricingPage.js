@@ -23,8 +23,6 @@ const PricingPage = () => {
                 'Professional tone only',
                 'Recruiter interaction counter'
             ],
-            cta: 'Current Plan',
-            disabled: true,
             planId: 'free'
         },
         {
@@ -75,7 +73,7 @@ const PricingPage = () => {
     return (
         <div className="min-h-screen bg-black">
             <Navbar />
-            <div className="max-w-7xl mx-auto px-6 py-12 sm:py-20">
+            <div className="max-w-7xl mx-auto px-6 py-12 sm:py-20 text-center">
                 {/* Header */}
                 <h1 className="text-4xl sm:text-6xl font-extrabold text-white mb-6"
                     style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
@@ -145,15 +143,17 @@ const PricingPage = () => {
                         {/* CTA Button */}
                         <Button
                             onClick={() => handleSubscribe(plan.planId)}
-                            disabled={plan.disabled || (user?.subscription_tier === plan.planId?.toLowerCase())}
+                            disabled={user?.subscription_tier === plan.planId}
                             className={`w-full font-semibold ${plan.popular
                                 ? 'bg-gradient-to-r from-emerald-500 to-lime-500 hover:from-emerald-600 hover:to-lime-600 text-black'
                                 : 'bg-gray-800 hover:bg-gray-700 text-white'
                                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
-                            {user?.subscription_tier === plan.planId?.toLowerCase()
+                            {user?.subscription_tier === plan.planId
                                 ? 'Current Plan'
-                                : plan.cta || 'Get Started'}
+                                : plan.planId === 'free'
+                                    ? 'Downgrade to Free'
+                                    : 'Get Started'}
                         </Button>
                     </div>
                 ))}

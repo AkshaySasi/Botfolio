@@ -902,6 +902,7 @@ async def chat_with_portfolio(request: Request, custom_url: str, chat: ChatMessa
 
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
+RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
 
 try:
     razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
@@ -934,7 +935,17 @@ async def create_order(request: OrderRequest, current_user: User = Depends(get_c
     if not amount:
         raise HTTPException(status_code=400, detail="Invalid plan")
     try:
-        data = {"amount": amount, "currency": "INR", "receipt": f"receipt_{current_user.id[:8]}"}
+        data = {
+            "amount": amount,
+            "currency": "INR",
+            "receipt": f"receipt_{current_user.id[:8]}",
+            # Notes are stored on the Razorpay order — the webhook reads these
+            # to know which user and plan to activate if the browser closes.
+            "notes": {
+                "user_id": current_user.id,
+                "plan_id": request.plan_id
+            }
+        }
         order = razorpay_client.order.create(data=data)
         return order
     except Exception as e:
@@ -1027,6 +1038,138 @@ async def get_payment_history(current_user: User = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Payment history error: {e}")
         return []
+
+
+# =============================================
+# RAZORPAY WEBHOOK  (server-side safety net)
+# =============================================
+# Razorpay calls this endpoint directly when a payment is captured.
+# It fires even if the user's browser closed after paying — ensuring the
+# plan is ALWAYS activated regardless of what the frontend does.
+#
+# Setup steps (do AFTER deploying):
+#   Razorpay Dashboard → Webhooks → Add Webhook
+#   URL:    https://your-backend.onrender.com/api/payment/webhook
+#   Events: payment.captured  (optionally payment.failed)
+#   Secret: any random string → set as RAZORPAY_WEBHOOK_SECRET in .env
+
+import hmac as _hmac
+import hashlib as _hashlib
+import json as _json
+
+@app.post("/api/payment/webhook")
+async def razorpay_webhook(request: Request):
+    """
+    Receives Razorpay webhook events and activates plans server-side.
+    Does NOT require a logged-in user — auth is via HMAC signature.
+    """
+    # 1. Read raw body (must be raw bytes for signature check)
+    body = await request.body()
+    sig_header = request.headers.get("X-Razorpay-Signature", "")
+
+    # 2. Verify HMAC-SHA256 signature
+    if not RAZORPAY_WEBHOOK_SECRET:
+        logger.warning("RAZORPAY_WEBHOOK_SECRET not set — skipping signature check (unsafe!)")
+    else:
+        expected_sig = _hmac.new(
+            RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
+            body,
+            _hashlib.sha256
+        ).hexdigest()
+        if not _hmac.compare_digest(expected_sig, sig_header):
+            logger.warning("Razorpay webhook: invalid signature — rejected")
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    # 3. Parse event
+    try:
+        event = _json.loads(body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    event_type = event.get("event")
+    logger.info(f"Razorpay webhook received: {event_type}")
+
+    # 4. Handle payment.captured
+    if event_type == "payment.captured":
+        try:
+            payment_entity = event.get("payload", {}).get("payment", {}).get("entity", {})
+            notes = payment_entity.get("notes", {})
+            user_id = notes.get("user_id")
+            plan_id = notes.get("plan_id")
+            razorpay_payment_id = payment_entity.get("id")
+            amount = payment_entity.get("amount", 0)
+
+            if not user_id or not plan_id:
+                logger.warning(f"Webhook: missing notes for payment {razorpay_payment_id}")
+                return {"status": "ok", "note": "missing notes — no action taken"}
+
+            # Idempotency check — prevents double-activation if Razorpay retries
+            try:
+                existing = supabase.table("payments").select("id").eq("razorpay_payment_id", razorpay_payment_id).execute()
+                if existing.data:
+                    logger.info(f"Webhook: {razorpay_payment_id} already processed — skipping")
+                    return {"status": "ok", "note": "already processed"}
+            except Exception:
+                pass  # payments table may not exist yet, continue
+
+            if plan_id.startswith("credits_"):
+                # Credit top-up
+                credits = int(plan_id.split("_")[1])
+                user_resp = supabase.table("users").select("bonus_credits").eq("id", user_id).single().execute()
+                current = user_resp.data.get("bonus_credits", 0) if user_resp.data else 0
+                supabase.table("users").update({"bonus_credits": current + credits}).eq("id", user_id).execute()
+                logger.info(f"Webhook: +{credits} bonus credits → user {user_id[:8]}")
+                expiry = None
+                base_tier = plan_id
+                billing_cycle = "one-time"
+            else:
+                # Subscription upgrade
+                is_annual = plan_id.endswith("_annual")
+                base_tier = plan_id.replace("_annual", "") if is_annual else plan_id
+                expiry = datetime.now(timezone.utc) + timedelta(days=365 if is_annual else 30)
+                billing_cycle = "annual" if is_annual else "monthly"
+                supabase.table("users").update({
+                    "subscription_tier": base_tier,
+                    "subscription_expiry": expiry.isoformat(),
+                    "daily_queries_count": 0
+                }).eq("id", user_id).execute()
+                logger.info(f"Webhook: activated {base_tier} plan → user {user_id[:8]} (expires {expiry.date()})")
+
+            # Log to payments table
+            try:
+                supabase.table("payments").insert({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "plan_id": base_tier,
+                    "amount": amount,
+                    "billing_cycle": billing_cycle,
+                    "status": "success",
+                    "razorpay_payment_id": razorpay_payment_id,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "expires_at": expiry.isoformat() if expiry else None
+                }).execute()
+            except Exception as log_err:
+                logger.warning(f"Webhook: payment log failed (non-fatal): {log_err}")
+
+        except Exception as e:
+            logger.error(f"Webhook processing error: {e}")
+            return {"status": "ok", "note": "processing error (logged)"}
+
+    # 5. Handle payment.failed (log only)
+    elif event_type == "payment.failed":
+        try:
+            entity = event.get("payload", {}).get("payment", {}).get("entity", {})
+            notes = entity.get("notes", {})
+            logger.warning(
+                f"Payment FAILED: id={entity.get('id')} "
+                f"user={notes.get('user_id', 'unknown')[:8]} "
+                f"plan={notes.get('plan_id', 'unknown')}"
+            )
+        except Exception:
+            pass
+
+    # Always return 200 — Razorpay retries on non-200
+    return {"status": "ok"}
 
 
 # =============================================
